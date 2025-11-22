@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-using System.Net.Mime;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -11,13 +9,12 @@ namespace Rest.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Produces(MediaTypeNames.Application.Json)]
 public class AuthController : ControllerBase
 {
-    private readonly IUserService _userService;
-    private readonly ITokenService _tokenService;
-    private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly ILogger<AuthController> _logger;
+    private readonly SignInManager<ApplicationUser> _signInManager;
+    private readonly ITokenService _tokenService;
+    private readonly IUserService _userService;
 
     public AuthController(
         IUserService userService,
@@ -31,60 +28,54 @@ public class AuthController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary>
-    /// Registers a new user.
-    /// </summary>
-    /// <param name="model">The registration details.</param>
-    /// <returns>The created user details and auth token.</returns>
     [HttpPost("register")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Register([FromBody] RegisterDto model)
     {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        _logger.LogInformation("Attempting to register user: {Username}", model.Username);
+
         var (success, user, errors) = await _userService.RegisterAsync(model);
 
         if (!success)
         {
-            return BadRequest(new ProblemDetails 
-            { 
-                Title = "Registration Failed",
-                Detail = "One or more validation errors occurred.",
-                Extensions = { ["errors"] = errors }
-            });
+            _logger.LogWarning("Registration failed for {Username}: {Errors}", model.Username,
+                string.Join(", ", errors));
+            return BadRequest(new { message = "Registration failed", errors });
         }
+
+        _logger.LogInformation("User {Username} registered successfully.", model.Username);
 
         var token = _tokenService.GenerateJwtToken(user!);
 
-        var response = new AuthResponseDto
+        return Ok(new AuthResponseDto
         {
             Token = token,
             Expiration = DateTime.UtcNow.AddHours(2),
             Username = user!.UserName!,
             Email = user.Email!,
             CoinBalance = user.CoinBalance
-        };
-
-        return CreatedAtAction(nameof(GetProfile), response);
+        });
     }
 
-    /// <summary>
-    /// Logs in an existing user.
-    /// </summary>
-    /// <param name="model">The login credentials.</param>
-    /// <returns>Auth token and user details.</returns>
     [HttpPost("login")]
     [AllowAnonymous]
-    [ProducesResponseType(typeof(AuthResponseDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Login([FromBody] LoginDto model)
     {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        _logger.LogInformation("Login attempt for user: {Username}", model.Username);
+
         var (success, user) = await _userService.LoginAsync(model);
 
         if (!success || user == null)
         {
-            return Unauthorized(new ProblemDetails { Title = "Authentication Failed", Detail = "Invalid username or password." });
+            _logger.LogWarning("Invalid login attempt for user: {Username}", model.Username);
+            return Unauthorized(new { message = "Invalid credentials" });
         }
+
+        _logger.LogInformation("User {Username} logged in successfully.", model.Username);
 
         var token = _tokenService.GenerateJwtToken(user);
 
@@ -98,63 +89,39 @@ public class AuthController : ControllerBase
         });
     }
 
-    /// <summary>
-    /// Logs out the current user (Cookie based).
-    /// </summary>
     [HttpPost("logout")]
     [Authorize]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Logout()
     {
+        var username = User.FindFirstValue(ClaimTypes.Name);
         await _signInManager.SignOutAsync();
+
+        _logger.LogInformation("User {Username} logged out successfully.", username);
         return Ok(new { message = "Logged out successfully" });
     }
 
-    /// <summary>
-    /// Retrieves the current user's profile.
-    /// </summary>
-    [HttpGet("profile")]
+    [HttpPost("change-password")]
     [Authorize]
-    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)] // Replace object with a DTO class ideally
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetProfile()
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto model)
     {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var username = User.FindFirstValue(ClaimTypes.Name);
+
         if (userId == null) return Unauthorized();
 
-        var user = await _userService.GetUserByIdAsync(userId);
-        if (user == null) return NotFound();
+        var (success, errors) =
+            await _userService.ChangePasswordAsync(userId, model.CurrentPassword, model.NewPassword);
 
-        return Ok(new
+        if (!success)
         {
-            username = user.UserName,
-            email = user.Email,
-            coinBalance = user.CoinBalance,
-            createdAt = user.CreatedAt,
-            lastLoginAt = user.LastLoginAt
-        });
-    }
+            _logger.LogWarning("Password change failed for user {Username}: {Errors}", username,
+                string.Join(", ", errors));
+            return BadRequest(new { message = "Failed to change password", errors });
+        }
 
-    /// <summary>
-    /// Retrieves current coin balance.
-    /// </summary>
-    [HttpGet("coins")]
-    [Authorize]
-    [ProducesResponseType(typeof(CoinBalanceDto), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetCoins()
-    {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (userId == null) return Unauthorized();
-
-        var user = await _userService.GetUserByIdAsync(userId);
-        if (user == null) return NotFound();
-
-        return Ok(new CoinBalanceDto
-        {
-            Username = user.UserName!,
-            CoinBalance = user.CoinBalance
-        });
+        _logger.LogInformation("Password changed successfully for user {Username}", username);
+        return Ok(new { message = "Password changed successfully" });
     }
 }

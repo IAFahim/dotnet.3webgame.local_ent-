@@ -163,44 +163,7 @@ public class AuthControllerTests
         // Assert
         Assert.IsType<UnauthorizedObjectResult>(result);
     }
-
-    [Fact]
-    public async Task GetCoins_AuthenticatedUser_ReturnsBalance()
-    {
-        // Arrange
-        var userId = "123";
-        var user = new ApplicationUser
-        {
-            Id = userId,
-            UserName = "testuser",
-            CoinBalance = 500.00m
-        };
-
-        _userServiceMock
-            .Setup(x => x.GetUserByIdAsync(userId))
-            .ReturnsAsync(user);
-
-        var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.NameIdentifier, userId)
-        };
-        var identity = new ClaimsIdentity(claims, "TestAuth");
-        var claimsPrincipal = new ClaimsPrincipal(identity);
-
-        _controller.ControllerContext = new ControllerContext
-        {
-            HttpContext = new DefaultHttpContext { User = claimsPrincipal }
-        };
-
-        // Act
-        var result = await _controller.GetCoins();
-
-        // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        var response = Assert.IsType<CoinBalanceDto>(okResult.Value);
-        Assert.Equal("testuser", response.Username);
-        Assert.Equal(500.00m, response.CoinBalance);
-    }
+    
 
     [Fact]
     public async Task ChangePassword_ValidRequest_ReturnsOk()

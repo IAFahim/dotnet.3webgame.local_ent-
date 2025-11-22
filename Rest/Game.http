@@ -1,0 +1,90 @@
+# ==========================================
+# 🍎 MAC / RIDER / VS CODE API SUITE
+# ==========================================
+
+@hostname = localhost
+@port = 5083
+@host = http://{{hostname}}:{{port}}
+@contentType = application/json
+
+# 🎲 Generate random user for this session
+@username = player_{{$randomInt}}
+@password = Password123!
+
+### 🟢 1. HEALTH CHECK
+GET {{host}}/health
+
+###
+
+### 📝 2. REGISTER
+POST {{host}}/api/auth/register
+Content-Type: {{contentType}}
+
+{
+  "username": "{{username}}",
+  "email": "{{username}}@game.com",
+  "password": "{{password}}"
+}
+
+###
+
+### 🔑 3. LOGIN (Run this to save Token!)
+# @name loginRequest
+POST {{host}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+> {%
+    // 💾 THIS SCRIPT SAVES THE TOKEN AUTOMATICALLY
+    client.global.set("auth_token", response.body.token);
+    client.log("Token saved: " + response.body.token);
+%}
+
+###
+
+### 💰 4. GET COINS (Uses Saved Token)
+GET {{host}}/api/auth/coins
+Authorization: Bearer {{auth_token}}
+Content-Type: {{contentType}}
+
+###
+
+### 👤 5. GET PROFILE
+GET {{host}}/api/auth/profile
+Authorization: Bearer {{auth_token}}
+Content-Type: {{contentType}}
+
+###
+
+### 🔐 6. CHANGE PASSWORD
+POST {{host}}/api/auth/change-password
+Authorization: Bearer {{auth_token}}
+Content-Type: {{contentType}}
+
+{
+  "currentPassword": "{{password}}",
+  "newPassword": "New{{password}}",
+  "confirmNewPassword": "New{{password}}"
+}
+
+###
+
+### 🛑 7. SECURITY CHECK: Weak Password
+POST {{host}}/api/auth/register
+Content-Type: {{contentType}}
+
+{
+  "username": "weak_user",
+  "email": "weak@test.com",
+  "password": "123"
+}
+
+###
+
+### ⛔ 8. SECURITY CHECK: Bad Token
+GET {{host}}/api/auth/coins
+Authorization: Bearer invalid_token_example

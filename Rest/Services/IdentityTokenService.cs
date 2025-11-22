@@ -8,7 +8,7 @@ using Rest.Models;
 namespace Rest.Services;
 
 /// <summary>
-/// Configuration options for JWT token generation
+///     Configuration options for JWT token generation
 /// </summary>
 public class JwtOptions
 {
@@ -19,7 +19,7 @@ public class JwtOptions
 }
 
 /// <summary>
-/// Token service for JWT generation using Identity claims
+///     Token service for JWT generation using Identity claims
 /// </summary>
 public class IdentityTokenService : ITokenService
 {
@@ -38,9 +38,9 @@ public class IdentityTokenService : ITokenService
         var claims = BuildClaims(user);
 
         var token = new JwtSecurityToken(
-            issuer: _jwtOptions.Issuer,
-            audience: _jwtOptions.Audience,
-            claims: claims,
+            _jwtOptions.Issuer,
+            _jwtOptions.Audience,
+            claims,
             expires: DateTime.UtcNow.AddHours(_jwtOptions.ExpirationHours),
             signingCredentials: credentials
         );

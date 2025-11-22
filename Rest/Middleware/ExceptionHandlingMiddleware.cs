@@ -5,9 +5,9 @@ namespace Rest.Middleware;
 
 public class ExceptionHandlingMiddleware
 {
-    private readonly RequestDelegate _next;
-    private readonly ILogger<ExceptionHandlingMiddleware> _logger;
     private readonly IHostEnvironment _environment;
+    private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+    private readonly RequestDelegate _next;
 
     public ExceptionHandlingMiddleware(
         RequestDelegate next,
@@ -35,8 +35,7 @@ public class ExceptionHandlingMiddleware
     private Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
         context.Response.ContentType = "application/json";
-        
-        // Determine status code based on exception type
+
         var statusCode = exception switch
         {
             KeyNotFoundException => (int)HttpStatusCode.NotFound,

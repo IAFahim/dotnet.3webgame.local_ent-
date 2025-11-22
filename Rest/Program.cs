@@ -1,36 +1,47 @@
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
+using Rest.Data;
 using Rest.Extensions;
 using Rest.Middleware;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Add Services
 builder.Services.AddControllers();
 
-// Database & Identity
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+
 builder.Services.AddDatabaseConfiguration(builder.Configuration);
 builder.Services.AddIdentityConfiguration();
-
-// Auth & JWT
 builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddApplicationServices();
-builder.Services.AddCorsConfiguration();
 
-// OpenAPI (Swagger) Configuration
-builder.Services.AddOpenApiDocumentation(); // Custom extension method below
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddFixedWindowLimiter("fixed", fixedWindowRateLimiterOptions =>
+    {
+        fixedWindowRateLimiterOptions.PermitLimit = 100;
+        fixedWindowRateLimiterOptions.Window = TimeSpan.FromMinutes(1);
+        fixedWindowRateLimiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        fixedWindowRateLimiterOptions.QueueLimit = 5;
+    });
+});
+
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ApplicationDbContext>();
+
+builder.Services.AddCorsConfiguration();
+builder.Services.AddOpenApiDocumentation();
 
 var app = builder.Build();
 
-// 2. Configure Pipeline
-// Exception Middleware must be near the top
-app.UseMiddleware<ExceptionHandlingMiddleware>();
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
-    // Generate the OpenAPI JSON
     app.MapOpenApi();
-    
-    // Serve Scalar UI
     app.MapScalarApiReference(options =>
     {
         options
@@ -39,18 +50,22 @@ if (app.Environment.IsDevelopment())
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
     });
 }
+else
+{
+    app.UseHsts();
+}
 
 app.UseHttpsRedirection();
 
-// CORS must be before Auth
 app.UseCors("AllowAll");
-
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapControllers();
+app.MapControllers().RequireRateLimiting("fixed");
 
-// Seed Data
+app.MapHealthChecks("/health");
+
 await app.SeedDatabaseAsync();
 
 app.Run();

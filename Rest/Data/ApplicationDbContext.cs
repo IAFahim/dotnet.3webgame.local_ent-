@@ -4,9 +4,6 @@ using Rest.Models;
 
 namespace Rest.Data;
 
-/// <summary>
-/// Database context using ASP.NET Core Identity
-/// </summary>
 public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
@@ -17,11 +14,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
-        
-        // Customize Identity tables (optional)
-        builder.Entity<ApplicationUser>(entity =>
-        {
-            entity.Property(u => u.CoinBalance).HasPrecision(18, 2);
-        });
+        builder.Entity<ApplicationUser>(entity => { entity.Property(u => u.CoinBalance).HasPrecision(18, 2); });
     }
 }

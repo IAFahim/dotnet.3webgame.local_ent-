@@ -19,27 +19,20 @@ public static class DatabaseExtensions
             var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
             var configuration = services.GetRequiredService<IConfiguration>();
 
-            // Ensure database is created
             await context.Database.EnsureCreatedAsync();
 
-            // Only seed if enabled in configuration
-            var seedEnabled = configuration.GetValue<bool>("SeedData:Enabled", true);
-            
+            var seedEnabled = configuration.GetValue("SeedData:Enabled", true);
+
             if (!seedEnabled)
             {
                 logger.LogInformation("Database seeding is disabled in configuration");
                 return;
             }
 
-            // Seed test users only if they don't exist
             if (!await userManager.Users.AnyAsync())
-            {
                 await SeedTestUsersAsync(userManager, logger);
-            }
             else
-            {
                 logger.LogInformation("Database already contains users. Skipping seed.");
-            }
         }
         catch (Exception ex)
         {
@@ -95,21 +88,17 @@ public static class DatabaseExtensions
         foreach (var testUser in testUsers)
         {
             var result = await userManager.CreateAsync(testUser.User, testUser.Password);
-            
+
             if (result.Succeeded)
-            {
                 logger.LogInformation(
-                    "✅ Created test user: {Username} / {Email}", 
-                    testUser.User.UserName, 
+                    "✅ Created test user: {Username} / {Email}",
+                    testUser.User.UserName,
                     testUser.User.Email);
-            }
             else
-            {
                 logger.LogError(
                     "❌ Failed to create user {Username}: {Errors}",
                     testUser.User.UserName,
                     string.Join(", ", result.Errors.Select(e => e.Description)));
-            }
         }
     }
 }
