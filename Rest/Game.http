@@ -46,11 +46,6 @@ Content-Type: {{contentType}}
 
 ###
 
-### 💰 4. GET COINS (Uses Saved Token)
-GET {{host}}/api/auth/coins
-Authorization: Bearer {{auth_token}}
-Content-Type: {{contentType}}
-
 ###
 
 ### 👤 5. GET PROFILE

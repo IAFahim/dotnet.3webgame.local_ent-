@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace Rest.Exceptions;
 
 public abstract class DomainException : Exception

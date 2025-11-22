@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -55,8 +57,7 @@ public class IdentityTokenService : ITokenService
             new(ClaimTypes.NameIdentifier, user.Id),
             new(ClaimTypes.Name, user.UserName!),
             new(ClaimTypes.Email, user.Email!),
-            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new("CoinBalance", user.CoinBalance.ToString())
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
     }
 }

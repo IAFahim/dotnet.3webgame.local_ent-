@@ -4,16 +4,7 @@ using Rest.Models;
 
 namespace Rest.Data;
 
-public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
+public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) 
+    : IdentityDbContext<ApplicationUser>(options)
 {
-    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
-        : base(options)
-    {
-    }
-
-    protected override void OnModelCreating(ModelBuilder builder)
-    {
-        base.OnModelCreating(builder);
-        builder.Entity<ApplicationUser>(entity => { entity.Property(u => u.CoinBalance).HasPrecision(18, 2); });
-    }
 }

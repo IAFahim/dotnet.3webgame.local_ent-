@@ -4,51 +4,49 @@ using Rest.Data;
 using Rest.Extensions;
 using Rest.Middleware;
 using Scalar.AspNetCore;
+using DotNetEnv;
+
+Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Configuration.AddEnvironmentVariables();
 builder.Services.AddControllers();
-
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
-
-builder.Services.AddDatabaseConfiguration(builder.Configuration);
-builder.Services.AddIdentityConfiguration();
-builder.Services.AddJwtAuthentication(builder.Configuration);
-builder.Services.AddApplicationServices();
+builder.Services.AddInfrastructure(builder.Configuration);
 
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddFixedWindowLimiter("fixed", fixedWindowRateLimiterOptions =>
+    options.AddFixedWindowLimiter("fixed", policy =>
     {
-        fixedWindowRateLimiterOptions.PermitLimit = 100;
-        fixedWindowRateLimiterOptions.Window = TimeSpan.FromMinutes(1);
-        fixedWindowRateLimiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        fixedWindowRateLimiterOptions.QueueLimit = 5;
+        policy.PermitLimit = 100;
+        policy.Window = TimeSpan.FromMinutes(1);
+        policy.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        policy.QueueLimit = 5;
     });
 });
 
-builder.Services.AddHealthChecks()
-    .AddDbContextCheck<ApplicationDbContext>();
-
-builder.Services.AddCorsConfiguration();
-builder.Services.AddOpenApiDocumentation();
+builder.Services.AddHealthChecks().AddDbContextCheck<ApplicationDbContext>();
+builder.Services.AddCors(o => o.AddPolicy("AllowAll", p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+builder.Services.AddOpenApiDocs();
 
 var app = builder.Build();
 
-app.UseExceptionHandler();
+app.UseExceptionHandler(); 
 
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference(options =>
     {
-        options
-            .WithTitle("Game Auth API")
-            .WithTheme(ScalarTheme.DeepSpace)
+        options.WithTitle("Game Auth API")
+            .WithTheme(ScalarTheme.Mars)
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
     });
+
+    await app.SeedDatabaseAsync();
 }
 else
 {
@@ -56,16 +54,13 @@ else
 }
 
 app.UseHttpsRedirection();
-
 app.UseCors("AllowAll");
 app.UseRateLimiter();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers().RequireRateLimiting("fixed");
-
 app.MapHealthChecks("/health");
-
-await app.SeedDatabaseAsync();
 
 app.Run();

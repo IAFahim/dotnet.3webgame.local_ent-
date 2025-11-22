@@ -1,5 +1,12 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Rest.Data;
 using Rest.Models;
 
@@ -53,7 +60,6 @@ public static class DatabaseExtensions
                 {
                     UserName = "testuser",
                     Email = "testuser@game.com",
-                    CoinBalance = 1000.00m,
                     CreatedAt = DateTime.UtcNow,
                     EmailConfirmed = true
                 },
@@ -65,7 +71,6 @@ public static class DatabaseExtensions
                 {
                     UserName = "player1",
                     Email = "player1@game.com",
-                    CoinBalance = 500.50m,
                     CreatedAt = DateTime.UtcNow,
                     EmailConfirmed = true
                 },
@@ -77,7 +82,6 @@ public static class DatabaseExtensions
                 {
                     UserName = "admin",
                     Email = "admin@game.com",
-                    CoinBalance = 0m,
                     CreatedAt = DateTime.UtcNow,
                     EmailConfirmed = true
                 },

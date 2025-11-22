@@ -1,4 +1,6 @@
+using System;
 using System.Security.Claims;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -9,119 +11,75 @@ namespace Rest.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController : ControllerBase
+public class AuthController(
+    IAuthService authService,
+    ITokenService tokenService,
+    SignInManager<ApplicationUser> signInManager) : ControllerBase
 {
-    private readonly ILogger<AuthController> _logger;
-    private readonly SignInManager<ApplicationUser> _signInManager;
-    private readonly ITokenService _tokenService;
-    private readonly IUserService _userService;
-
-    public AuthController(
-        IUserService userService,
-        ITokenService tokenService,
-        SignInManager<ApplicationUser> signInManager,
-        ILogger<AuthController> logger)
-    {
-        _userService = userService;
-        _tokenService = tokenService;
-        _signInManager = signInManager;
-        _logger = logger;
-    }
-
     [HttpPost("register")]
     [AllowAnonymous]
-    public async Task<IActionResult> Register([FromBody] RegisterDto model)
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var result = await authService.RegisterAsync(request);
 
-        _logger.LogInformation("Attempting to register user: {Username}", model.Username);
-
-        var (success, user, errors) = await _userService.RegisterAsync(model);
-
-        if (!success)
+        if (result.IsFailure)
         {
-            _logger.LogWarning("Registration failed for {Username}: {Errors}", model.Username,
-                string.Join(", ", errors));
-            return BadRequest(new { message = "Registration failed", errors });
+            return BadRequest(new ProblemDetails { Title = "Registration Failed", Detail = result.Error.Description });
         }
 
-        _logger.LogInformation("User {Username} registered successfully.", model.Username);
+        var token = tokenService.GenerateJwtToken(result.Value);
 
-        var token = _tokenService.GenerateJwtToken(user!);
-
-        return Ok(new AuthResponseDto
-        {
-            Token = token,
-            Expiration = DateTime.UtcNow.AddHours(2),
-            Username = user!.UserName!,
-            Email = user.Email!,
-            CoinBalance = user.CoinBalance
-        });
+        return Ok(new AuthResponse(
+            token,
+            DateTime.UtcNow.AddHours(2),
+            result.Value.UserName!,
+            result.Value.Email!
+        ));
     }
 
     [HttpPost("login")]
     [AllowAnonymous]
-    public async Task<IActionResult> Login([FromBody] LoginDto model)
+    public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var result = await authService.LoginAsync(request);
 
-        _logger.LogInformation("Login attempt for user: {Username}", model.Username);
-
-        var (success, user) = await _userService.LoginAsync(model);
-
-        if (!success || user == null)
+        if (result.IsFailure)
         {
-            _logger.LogWarning("Invalid login attempt for user: {Username}", model.Username);
-            return Unauthorized(new { message = "Invalid credentials" });
+            return Unauthorized(new ProblemDetails { Title = "Auth Failed", Detail = result.Error.Description });
         }
 
-        _logger.LogInformation("User {Username} logged in successfully.", model.Username);
+        var token = tokenService.GenerateJwtToken(result.Value);
 
-        var token = _tokenService.GenerateJwtToken(user);
-
-        return Ok(new AuthResponseDto
-        {
-            Token = token,
-            Expiration = DateTime.UtcNow.AddHours(2),
-            Username = user.UserName!,
-            Email = user.Email!,
-            CoinBalance = user.CoinBalance
-        });
+        return Ok(new AuthResponse(
+            token,
+            DateTime.UtcNow.AddHours(2),
+            result.Value.UserName!,
+            result.Value.Email!
+        ));
     }
 
     [HttpPost("logout")]
     [Authorize]
     public async Task<IActionResult> Logout()
     {
-        var username = User.FindFirstValue(ClaimTypes.Name);
-        await _signInManager.SignOutAsync();
-
-        _logger.LogInformation("User {Username} logged out successfully.", username);
+        await signInManager.SignOutAsync();
         return Ok(new { message = "Logged out successfully" });
     }
 
     [HttpPost("change-password")]
     [Authorize]
-    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto model)
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
-
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var username = User.FindFirstValue(ClaimTypes.Name);
+        if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
-        if (userId == null) return Unauthorized();
+        var result = await authService.ChangePasswordAsync(userId, request);
 
-        var (success, errors) =
-            await _userService.ChangePasswordAsync(userId, model.CurrentPassword, model.NewPassword);
-
-        if (!success)
+        if (result.IsFailure)
         {
-            _logger.LogWarning("Password change failed for user {Username}: {Errors}", username,
-                string.Join(", ", errors));
-            return BadRequest(new { message = "Failed to change password", errors });
+            return BadRequest(new ProblemDetails { Title = "Operation Failed", Detail = result.Error.Description });
         }
 
-        _logger.LogInformation("Password changed successfully for user {Username}", username);
         return Ok(new { message = "Password changed successfully" });
     }
 }
