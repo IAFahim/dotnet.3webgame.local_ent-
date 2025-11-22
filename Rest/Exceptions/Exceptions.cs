@@ -1,37 +1,20 @@
-using System;
-using System.Collections.Generic;
+using Rest.Common; // Helper for ValidationFailure
 
 namespace Rest.Exceptions;
 
-public abstract class DomainException : Exception
+// 1. The Base Exception
+public abstract class DomainException(string message) : Exception(message);
+
+// 2. The Validation Exception (Structured)
+public class ValidationException(IEnumerable<ValidationFailure> errors) 
+    : DomainException("One or more validation errors occurred.")
 {
-    protected DomainException(string message) : base(message)
-    {
-    }
+    public IEnumerable<ValidationFailure> Errors { get; } = errors;
 }
 
-public class NotFoundException : DomainException
-{
-    public NotFoundException(string resource, string key)
-        : base($"{resource} with key '{key}' was not found.")
-    {
-    }
-}
+// 3. Other Standard Exceptions
+public class NotFoundException(string resource, string key) 
+    : DomainException($"{resource} with key '{key}' was not found.");
 
-public class ValidationException : DomainException
-{
-    public ValidationException(IEnumerable<string> errors)
-        : base("One or more validation errors occurred.")
-    {
-        Errors = errors;
-    }
-
-    public IEnumerable<string> Errors { get; }
-}
-
-public class UnauthorizedException : DomainException
-{
-    public UnauthorizedException(string message) : base(message)
-    {
-    }
-}
+public class UnauthorizedException(string message) 
+    : DomainException(message);

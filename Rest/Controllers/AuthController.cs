@@ -1,16 +1,18 @@
-using System;
 using System.Security.Claims;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting; // <-- Add this
 using Rest.Models;
 using Rest.Services;
 
 namespace Rest.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+// 1. Match the URL seen in your logs (api/v1/auth)
+[Route("api/v1/auth")] 
+// 2. Apply Rate Limiting here explicitly
+[EnableRateLimiting("fixed")] 
 public class AuthController(
     IAuthService authService,
     ITokenService tokenService,
@@ -28,7 +30,7 @@ public class AuthController(
         }
 
         var token = tokenService.GenerateJwtToken(result.Value);
-
+        
         return Ok(new AuthResponse(
             token,
             DateTime.UtcNow.AddHours(2),

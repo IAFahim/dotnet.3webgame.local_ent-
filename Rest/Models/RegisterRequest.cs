@@ -4,32 +4,35 @@ using System.ComponentModel.DataAnnotations;
 namespace Rest.Models;
 
 public record RegisterRequest(
-    [property: Required] 
-    [property: StringLength(50, MinimumLength = 3)] 
-    [property: DefaultValue("new_hero")]
+    // Validation: No prefix (targets Parameter)
+    [Required] 
+    [StringLength(50, MinimumLength = 3)]
+    // Docs: Use 'property:' (targets Property for Scalar)
+    [property: DefaultValue("new_hero")] 
     string Username,
 
-    [property: Required] 
-    [property: EmailAddress] 
+    [Required] 
+    [EmailAddress] 
     [property: DefaultValue("hero@game.com")] 
     string Email,
 
-    [property: Required] 
-    [property: StringLength(100, MinimumLength = 8)] 
+    [Required] 
+    [StringLength(100, MinimumLength = 8)] 
     [property: DefaultValue("Password123!")] 
     string Password
 );
 
 public record LoginRequest(
-    [property: Required] 
-    [property: DefaultValue("player1")]
+    [Required] 
+    [property: DefaultValue("player1")] 
     string Username,
 
-    [property: Required] 
+    [Required] 
     [property: DefaultValue("Player123!")] 
     string Password
 );
 
+// This one stays the same because it's a standard class/record (not positional)
 public record ChangePasswordRequest
 {
     [Required]

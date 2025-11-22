@@ -1,24 +1,31 @@
 using System.Threading.RateLimiting;
+using DotNetEnv;
 using Microsoft.AspNetCore.RateLimiting;
 using Rest.Data;
 using Rest.Extensions;
 using Rest.Middleware;
 using Scalar.AspNetCore;
-using DotNetEnv;
 
+// 1. Load Env
 Env.Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
+// 2. Add Environment Variables
 builder.Configuration.AddEnvironmentVariables();
+
+// Add Services
 builder.Services.AddControllers();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddInfrastructure(builder.Configuration);
 
+// --- FIX 1: RATE LIMITER SERVICE DEFINITION ---
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    
+    // This defines the policy named "fixed"
     options.AddFixedWindowLimiter("fixed", policy =>
     {
         policy.PermitLimit = 100;
@@ -34,6 +41,7 @@ builder.Services.AddOpenApiDocs();
 
 var app = builder.Build();
 
+// Configure Pipeline
 app.UseExceptionHandler(); 
 
 if (app.Environment.IsDevelopment())
@@ -45,7 +53,7 @@ if (app.Environment.IsDevelopment())
             .WithTheme(ScalarTheme.Mars)
             .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
     });
-
+    
     await app.SeedDatabaseAsync();
 }
 else
@@ -54,13 +62,16 @@ else
 }
 
 app.UseHttpsRedirection();
-app.UseCors("AllowAll");
-app.UseRateLimiter();
 
-app.UseAuthentication();
+// --- FIX 2: MIDDLEWARE ORDER IS CRITICAL ---
+app.UseCors("AllowAll");   // 1. CORS first
+app.UseRateLimiter();      // 2. Rate Limiter second
+app.UseAuthentication();   // 3. Auth third
 app.UseAuthorization();
 
-app.MapControllers().RequireRateLimiting("fixed");
+// --- FIX 3: REMOVE .RequireRateLimiting("fixed") HERE ---
+// We will add it to the Controller instead.
+app.MapControllers(); 
 app.MapHealthChecks("/health");
 
 app.Run();

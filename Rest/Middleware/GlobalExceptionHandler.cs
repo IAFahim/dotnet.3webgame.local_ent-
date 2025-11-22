@@ -1,58 +1,52 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
+using Rest.Behaviors; // for ValidationFailure
 
 namespace Rest.Middleware;
 
-public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger, IHostEnvironment env) 
-    : IExceptionHandler
+public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
 {
-    public async ValueTask<bool> TryHandleAsync(
-        HttpContext context,
-        Exception exception,
-        CancellationToken cancellationToken)
+    public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken token)
     {
-        var (statusCode, title, details) = MapException(exception);
+        logger.LogError(exception, "Unhandled exception: {Message}", exception.Message);
 
-        logger.LogError(exception, "Exception occurred: {Message}", exception.Message);
+        var (statusCode, title, details, extensions) = MapException(exception);
 
         var problemDetails = new ProblemDetails
         {
             Status = statusCode,
             Title = title,
             Detail = details,
-            Instance = $"{context.Request.Method} {context.Request.Path}",
-            Type = exception.GetType().Name
+            Type = exception.GetType().Name,
+            Instance = context.Request.Path
         };
 
-        problemDetails.Extensions.Add("traceId", context.TraceIdentifier);
-
-        if (env.IsDevelopment())
+        if (extensions is not null)
         {
-            problemDetails.Extensions.Add("stackTrace", exception.StackTrace);
+            problemDetails.Extensions.Add("errors", extensions);
         }
 
         context.Response.StatusCode = statusCode;
-        await context.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
-
+        await context.Response.WriteAsJsonAsync(problemDetails, token);
         return true;
     }
 
-    private static (int StatusCode, string Title, string Details) MapException(Exception exception)
+    private static (int Status, string Title, string Detail, object? Extensions) MapException(Exception ex)
     {
-        return exception switch
+        return ex switch
         {
-            ArgumentException ex => (StatusCodes.Status400BadRequest, "Invalid Argument", ex.Message),
-            UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "Unauthorized", "Access Denied"),
-            KeyNotFoundException => (StatusCodes.Status404NotFound, "Not Found", "Resource not found"),
-
-            _ => (StatusCodes.Status500InternalServerError, "Internal Server Error", "An unexpected error occurred.")
+            // Handle our FluentValidation pipeline exception
+            Exceptions.ValidationException valEx => (
+                StatusCodes.Status400BadRequest,
+                "Validation Failure",
+                "One or more validation errors occurred",
+                // Group errors by property name for clean JSON output
+                valEx.Errors
+                    .GroupBy(e => e.PropertyName)
+                    .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray())
+            ),
+            UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "Unauthorized", "Access Denied", null),
+            _ => (StatusCodes.Status500InternalServerError, "Server Error", "An unexpected error occurred", null)
         };
     }
 }
