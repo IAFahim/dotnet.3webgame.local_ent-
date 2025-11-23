@@ -9,10 +9,9 @@ public sealed class LoginRequest
     [StringLength(50, MinimumLength = 3)]
     [DefaultValue("testuser")]
     public required string Username { get; init; }
-    
+
     [Required]
     [StringLength(100, MinimumLength = 8)]
     [DefaultValue("Password123!")]
     public required string Password { get; init; }
 }
-

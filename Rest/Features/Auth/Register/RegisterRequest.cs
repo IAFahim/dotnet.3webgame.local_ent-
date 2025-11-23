@@ -9,16 +9,15 @@ public sealed class RegisterRequest
     [StringLength(50, MinimumLength = 3)]
     [DefaultValue("new_hero")]
     public required string Username { get; init; }
-    
+
     [Required]
     [EmailAddress]
     [StringLength(100)]
     [DefaultValue("hero@game.com")]
     public required string Email { get; init; }
-    
+
     [Required]
     [StringLength(100, MinimumLength = 8)]
     [DefaultValue("Password123!")]
     public required string Password { get; init; }
 }
-

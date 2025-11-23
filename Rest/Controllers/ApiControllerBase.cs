@@ -4,7 +4,7 @@ using Rest.Common;
 namespace Rest.Controllers;
 
 /// <summary>
-/// Base controller with common functionality for API controllers.
+///     Base controller with common functionality for API controllers.
 /// </summary>
 [ApiController]
 [Produces("application/json")]
@@ -12,30 +12,25 @@ namespace Rest.Controllers;
 public abstract class ApiControllerBase : ControllerBase
 {
     /// <summary>
-    /// Creates a ProblemDetails response from an Error.
+    ///     Creates a ProblemDetails response from an Error.
     /// </summary>
     protected static ProblemDetails ToProblemDetails(Error error) =>
-        new()
-        {
-            Title = error.Code,
-            Detail = error.Description,
-            Type = error.Code
-        };
+        new() { Title = error.Code, Detail = error.Description, Type = error.Code };
 
     /// <summary>
-    /// Creates a BadRequest response with ProblemDetails.
+    ///     Creates a BadRequest response with ProblemDetails.
     /// </summary>
     protected ObjectResult BadRequestProblem(Error error) =>
         BadRequest(ToProblemDetails(error));
 
     /// <summary>
-    /// Creates an Unauthorized response with ProblemDetails.
+    ///     Creates an Unauthorized response with ProblemDetails.
     /// </summary>
     protected ObjectResult UnauthorizedProblem(Error error) =>
         Unauthorized(ToProblemDetails(error));
 
     /// <summary>
-    /// Creates a NotFound response with ProblemDetails.
+    ///     Creates a NotFound response with ProblemDetails.
     /// </summary>
     protected ObjectResult NotFoundProblem(Error error) =>
         NotFound(ToProblemDetails(error));

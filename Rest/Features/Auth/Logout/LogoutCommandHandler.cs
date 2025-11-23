@@ -17,7 +17,10 @@ public sealed class LogoutCommandHandler(
             .Include(u => u.RefreshTokens)
             .FirstOrDefaultAsync(u => u.Id == request.UserId, cancellationToken);
 
-        if (user is null) return Result.Success(); // Idempotent
+        if (user is null)
+        {
+            return Result.Success(); // Idempotent
+        }
 
         // Revoke all active tokens
         foreach (var token in user.RefreshTokens.Where(t => t.IsActive))
@@ -26,9 +29,9 @@ public sealed class LogoutCommandHandler(
         }
 
         await userManager.UpdateAsync(user);
-        
+
         logger.LogInformation("User {Username} logged out and all sessions revoked.", user.UserName);
-        
+
         return Result.Success();
     }
 }

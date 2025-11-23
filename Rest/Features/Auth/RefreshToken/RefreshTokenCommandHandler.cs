@@ -18,7 +18,9 @@ public sealed class RefreshTokenCommandHandler(
     {
         var principal = tokenService.GetPrincipalFromExpiredToken(request.AccessToken);
         if (principal is null)
+        {
             return Result.Failure<AuthResponse>(new Error("Auth.InvalidToken", "Invalid access token"));
+        }
 
         // Because we cleared the map, the ID is in 'sub'
         var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
@@ -27,12 +29,16 @@ public sealed class RefreshTokenCommandHandler(
             .SingleOrDefaultAsync(u => u.Id == userId, cancellationToken);
 
         if (user is null)
+        {
             return Result.Failure<AuthResponse>(new Error("Auth.UserNotFound", "User not found"));
+        }
 
         var storedToken = user.RefreshTokens.FirstOrDefault(x => x.Token == request.RefreshToken);
 
         if (storedToken is null)
+        {
             return Result.Failure<AuthResponse>(new Error("Auth.InvalidToken", "Invalid refresh token"));
+        }
 
         // Reuse Detection logic
         if (storedToken.Revoked != null)
@@ -44,24 +50,26 @@ public sealed class RefreshTokenCommandHandler(
         }
 
         if (!storedToken.IsActive)
+        {
             return Result.Failure<AuthResponse>(new Error("Auth.ExpiredToken", "Refresh token expired"));
+        }
 
         // Rotation
         var newRefreshToken = tokenService.GenerateRefreshToken();
         storedToken.Revoked = DateTime.UtcNow;
         storedToken.ReplacedByToken = newRefreshToken.Token;
-        
+
         user.RefreshTokens.Add(newRefreshToken);
-        
+
         var newAccessToken = tokenService.GenerateJwtToken(user);
-        
+
         await userManager.UpdateAsync(user);
 
         return new AuthResponse(
-            newAccessToken, 
-            newRefreshToken.Token, 
-            newRefreshToken.Expires, 
-            user.UserName!, 
+            newAccessToken,
+            newRefreshToken.Token,
+            newRefreshToken.Expires,
+            user.UserName!,
             user.Email!);
     }
 }

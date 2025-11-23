@@ -1,7 +1,9 @@
 using FluentValidation;
 using MediatR;
 using Rest.Common;
-using Rest.Exceptions; // Assuming you have a ValidationException definition
+using ValidationException = Rest.Exceptions.ValidationException;
+
+// Assuming you have a ValidationException definition
 
 namespace Rest.Behaviors;
 
@@ -9,9 +11,13 @@ public sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidat
     : IPipelineBehavior<TRequest, TResponse>
     where TRequest : class
 {
-    public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+    public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next,
+        CancellationToken cancellationToken)
     {
-        if (!validators.Any()) return await next();
+        if (!validators.Any())
+        {
+            return await next();
+        }
 
         var context = new ValidationContext<TRequest>(request);
 
@@ -26,7 +32,7 @@ public sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidat
 
         if (errors.Any())
         {
-            throw new Rest.Exceptions.ValidationException(errors);
+            throw new ValidationException(errors);
         }
 
         return await next();

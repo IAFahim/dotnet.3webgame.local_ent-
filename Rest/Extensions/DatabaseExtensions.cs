@@ -1,12 +1,5 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Rest.Data;
 using Rest.Models;
 
@@ -37,9 +30,13 @@ public static class DatabaseExtensions
             }
 
             if (!await userManager.Users.AnyAsync())
+            {
                 await SeedTestUsersAsync(userManager, logger);
+            }
             else
+            {
                 logger.LogInformation("Database already contains users. Skipping seed.");
+            }
         }
         catch (Exception ex)
         {
@@ -94,15 +91,19 @@ public static class DatabaseExtensions
             var result = await userManager.CreateAsync(testUser.User, testUser.Password);
 
             if (result.Succeeded)
+            {
                 logger.LogInformation(
                     "✅ Created test user: {Username} / {Email}",
                     testUser.User.UserName,
                     testUser.User.Email);
+            }
             else
+            {
                 logger.LogError(
                     "❌ Failed to create user {Username}: {Errors}",
                     testUser.User.UserName,
                     string.Join(", ", result.Errors.Select(e => e.Description)));
+            }
         }
     }
 }

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using Rest.Behaviors;
+using Rest.Exceptions;
 
 namespace Rest.Middleware;
 
@@ -35,7 +35,7 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
     {
         return ex switch
         {
-            Exceptions.ValidationException valEx => (
+            ValidationException valEx => (
                 StatusCodes.Status400BadRequest,
                 "Validation Failure",
                 "One or more validation errors occurred", valEx.Errors

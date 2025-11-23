@@ -15,26 +15,26 @@ Log.Logger = new LoggerConfiguration()
 try
 {
     Log.Information("Starting Game Auth API...");
-    
-    Env.TraversePath().Load(); 
-    
-    JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear(); 
-    
+
+    Env.TraversePath().Load();
+
+    JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
+
     var builder = WebApplication.CreateBuilder(args);
-    
+
     builder.Configuration.AddEnvironmentVariables();
 
     builder.Host.UseSerilog((context, services, configuration) => configuration
         .ReadFrom.Configuration(context.Configuration)
         .ReadFrom.Services(services)
         .Enrich.FromLogContext()
-        .WriteTo.Console());
+    );
 
     builder.Services.AddControllers(options =>
     {
         options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = false;
     });
-    
+
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
     builder.Services.AddProblemDetails(options =>
     {
@@ -42,11 +42,12 @@ try
         {
             ctx.ProblemDetails.Instance = $"{ctx.HttpContext.Request.Method} {ctx.HttpContext.Request.Path}";
             ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier;
-            ctx.ProblemDetails.Extensions["requestId"] = ctx.HttpContext.Request.Headers["X-Request-ID"].FirstOrDefault() 
-                                                         ?? ctx.HttpContext.TraceIdentifier;
+            ctx.ProblemDetails.Extensions["requestId"] =
+                ctx.HttpContext.Request.Headers["X-Request-ID"].FirstOrDefault()
+                ?? ctx.HttpContext.TraceIdentifier;
         };
     });
-    
+
     builder.Services.AddInfrastructure(builder.Configuration);
 
     builder.Services.AddResponseCaching();
@@ -58,7 +59,7 @@ try
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-        
+
         options.AddFixedWindowLimiter("fixed", policy =>
         {
             policy.PermitLimit = 100;
@@ -66,35 +67,36 @@ try
             policy.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
             policy.QueueLimit = 5;
         });
-        
+
         options.AddPolicy("api", context =>
         {
             var username = context.User.Identity?.Name ?? "anonymous";
-            return RateLimitPartition.GetFixedWindowLimiter(username, _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 100,
-                Window = TimeSpan.FromMinutes(1),
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                QueueLimit = 5
-            });
+            return RateLimitPartition.GetFixedWindowLimiter(username,
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 100,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    QueueLimit = 5
+                });
         });
     });
 
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<ApplicationDbContext>();
-    
-    builder.Services.AddCors(options => 
+
+    builder.Services.AddCors(options =>
     {
-        options.AddPolicy("AllowAll", policy => 
+        options.AddPolicy("AllowAll", policy =>
             policy.AllowAnyOrigin()
-                  .AllowAnyMethod()
-                  .AllowAnyHeader());
+                .AllowAnyMethod()
+                .AllowAnyHeader());
     });
 
     var app = builder.Build();
 
     app.UseSecurityHeaders();
-    app.UseExceptionHandler(); 
+    app.UseExceptionHandler();
     app.UseSerilogRequestLogging(options =>
     {
         options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
@@ -121,7 +123,7 @@ try
                 .WithPreferredScheme("Bearer")
                 .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
         });
-        
+
         await app.SeedDatabaseAsync();
     }
     else
@@ -134,20 +136,20 @@ try
     app.UseResponseCompression();
     app.UseResponseCaching();
     app.UseRateLimiter();
-    
+
     app.UseAuthentication();
     app.UseAuthorization();
 
     app.MapControllers()
-        .RequireRateLimiting("api"); 
-    
+        .RequireRateLimiting("api");
+
     app.MapHealthChecks("/health")
         .AllowAnonymous();
 
     app.Lifetime.ApplicationStarted.Register(() =>
     {
         var addresses = app.Urls.Any() ? app.Urls : new[] { "http://localhost:5000" };
-        
+
         foreach (var address in addresses)
         {
             Log.Information("─────────────────────────────────────────────────────────");

@@ -24,16 +24,17 @@ public sealed class TokenService(IOptions<JwtSettings> jwtOptions, TimeProvider 
             new(JwtRegisteredClaimNames.UniqueName, user.UserName!),
             new(JwtRegisteredClaimNames.Email, user.Email!),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new(JwtRegisteredClaimNames.Iat, timeProvider.GetUtcNow().ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
+            new(JwtRegisteredClaimNames.Iat, timeProvider.GetUtcNow().ToUnixTimeSeconds().ToString(),
+                ClaimValueTypes.Integer64)
         };
 
         var token = new JwtSecurityToken(
-            issuer: _settings.Issuer,
-            audience: _settings.Audience,
-            claims: claims,
-            notBefore: timeProvider.GetUtcNow().DateTime,
-            expires: timeProvider.GetUtcNow().AddHours(_settings.ExpirationHours).DateTime,
-            signingCredentials: credentials
+            _settings.Issuer,
+            _settings.Audience,
+            claims,
+            timeProvider.GetUtcNow().DateTime,
+            timeProvider.GetUtcNow().AddHours(_settings.ExpirationHours).DateTime,
+            credentials
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
@@ -44,7 +45,7 @@ public sealed class TokenService(IOptions<JwtSettings> jwtOptions, TimeProvider 
         var randomNumber = new byte[64];
         using var rng = RandomNumberGenerator.Create();
         rng.GetBytes(randomNumber);
-        
+
         return new RefreshToken
         {
             Token = Convert.ToBase64String(randomNumber),
@@ -61,22 +62,24 @@ public sealed class TokenService(IOptions<JwtSettings> jwtOptions, TimeProvider 
             ValidateIssuer = false,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_settings.Key)),
-            ValidateLifetime = false 
+            ValidateLifetime = false
         };
 
         var tokenHandler = new JwtSecurityTokenHandler();
         // Important: Ensure claims aren't remapped here either
-        tokenHandler.InboundClaimTypeMap.Clear(); 
+        tokenHandler.InboundClaimTypeMap.Clear();
 
         try
         {
-            var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out SecurityToken securityToken);
-            
-            if (securityToken is not JwtSecurityToken jwtSecurityToken || 
-                !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
+            var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out var securityToken);
+
+            if (securityToken is not JwtSecurityToken jwtSecurityToken ||
+                !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256,
+                    StringComparison.InvariantCultureIgnoreCase))
             {
                 throw new SecurityTokenException("Invalid token");
             }
+
             return principal;
         }
         catch

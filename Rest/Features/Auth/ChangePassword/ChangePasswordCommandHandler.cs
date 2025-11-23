@@ -8,7 +8,7 @@ namespace Rest.Features.Auth.ChangePassword;
 
 public sealed class ChangePasswordCommandHandler(
     UserManager<ApplicationUser> userManager,
-    ILogger<ChangePasswordCommandHandler> logger) 
+    ILogger<ChangePasswordCommandHandler> logger)
     : IRequestHandler<ChangePasswordCommand, Result>
 {
     public async Task<Result> Handle(ChangePasswordCommand request, CancellationToken cancellationToken)
@@ -42,6 +42,7 @@ public sealed class ChangePasswordCommandHandler(
             {
                 token.Revoked = DateTime.UtcNow;
             }
+
             await userManager.UpdateAsync(userWithTokens);
         }
 

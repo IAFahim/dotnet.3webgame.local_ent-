@@ -1,9 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Options;
 using Rest.Common;
 using Rest.Models;
-using Rest.Options;
 using Rest.Services;
 
 namespace Rest.Features.Auth.Login;
@@ -13,22 +11,27 @@ public sealed class LoginCommandHandler(
     SignInManager<ApplicationUser> signInManager,
     ITokenService tokenService,
     TimeProvider timeProvider,
-    ILogger<LoginCommandHandler> logger) 
+    ILogger<LoginCommandHandler> logger)
     : IRequestHandler<LoginCommand, Result<AuthResponse>>
 {
     public async Task<Result<AuthResponse>> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
         var user = await userManager.FindByNameAsync(request.Username);
-        if (user is null) return InvalidCreds();
+        if (user is null)
+        {
+            return InvalidCreds();
+        }
 
-        var result = await signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
-        if (!result.Succeeded) 
+        var result = await signInManager.CheckPasswordSignInAsync(user, request.Password, true);
+        if (!result.Succeeded)
         {
             if (result.IsLockedOut)
             {
                 logger.LogWarning("User {Username} is locked out", request.Username);
-                return Result.Failure<AuthResponse>(new Error("Auth.LockedOut", "Account is locked out. Please try again later."));
+                return Result.Failure<AuthResponse>(new Error("Auth.LockedOut",
+                    "Account is locked out. Please try again later."));
             }
+
             return InvalidCreds();
         }
 
@@ -37,21 +40,21 @@ public sealed class LoginCommandHandler(
 
         user.RefreshTokens.Add(refreshToken);
 
-        user.RefreshTokens.RemoveAll(t => 
-            !t.IsActive && 
+        user.RefreshTokens.RemoveAll(t =>
+            !t.IsActive &&
             t.Created.AddDays(2) <= timeProvider.GetUtcNow().DateTime);
 
         user.LastLoginAt = timeProvider.GetUtcNow().DateTime;
-        
+
         await userManager.UpdateAsync(user);
 
         logger.LogInformation("User {Username} logged in successfully", user.UserName);
 
         return new AuthResponse(
-            accessToken, 
-            refreshToken.Token, 
-            refreshToken.Expires, 
-            user.UserName!, 
+            accessToken,
+            refreshToken.Token,
+            refreshToken.Expires,
+            user.UserName!,
             user.Email!);
     }
 

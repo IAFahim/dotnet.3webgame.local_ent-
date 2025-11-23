@@ -9,7 +9,7 @@ namespace Rest.Features.Auth.Register;
 public sealed class RegisterCommandHandler(
     UserManager<ApplicationUser> userManager,
     ITokenService tokenService,
-    ILogger<RegisterCommandHandler> logger) 
+    ILogger<RegisterCommandHandler> logger)
     : IRequestHandler<RegisterCommand, Result<AuthResponse>>
 {
     public async Task<Result<AuthResponse>> Handle(RegisterCommand request, CancellationToken cancellationToken)
@@ -22,12 +22,7 @@ public sealed class RegisterCommandHandler(
             return Result.Failure<AuthResponse>(new Error("Auth.DuplicateEmail", "Email is already registered."));
         }
 
-        var user = new ApplicationUser 
-        { 
-            UserName = request.Username, 
-            Email = request.Email,
-            EmailConfirmed = false
-        };
+        var user = new ApplicationUser { UserName = request.Username, Email = request.Email, EmailConfirmed = false };
 
         var result = await userManager.CreateAsync(user, request.Password);
 
@@ -47,10 +42,10 @@ public sealed class RegisterCommandHandler(
         logger.LogInformation("User {Username} registered successfully", user.UserName);
 
         return new AuthResponse(
-            accessToken, 
-            refreshToken.Token, 
-            refreshToken.Expires, 
-            user.UserName!, 
+            accessToken,
+            refreshToken.Token,
+            refreshToken.Expires,
+            user.UserName!,
             user.Email!
         );
     }
