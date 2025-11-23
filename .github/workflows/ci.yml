@@ -86,9 +86,10 @@ jobs:
       if: success() || failure()
       with:
         name: Unit Test Results
-        path: 'TestResults/*.trx'
+        path: 'TestResults/**/*.trx'
         reporter: dotnet-trx
         fail-on-error: false
+        fail-on-empty: false
     
     - name: 📈 Code Coverage Report
       uses: codecov/codecov-action@v4
@@ -134,9 +135,10 @@ jobs:
       if: success() || failure()
       with:
         name: Integration Test Results
-        path: 'TestResults/*.trx'
+        path: 'TestResults/**/*.trx'
         reporter: dotnet-trx
         fail-on-error: false
+        fail-on-empty: false
     
     - name: 📈 Code Coverage Report
       uses: codecov/codecov-action@v4
@@ -182,9 +184,10 @@ jobs:
       if: success() || failure()
       with:
         name: Security Test Results
-        path: 'TestResults/*.trx'
+        path: 'TestResults/**/*.trx'
         reporter: dotnet-trx
         fail-on-error: false
+        fail-on-empty: false
 
   # Dependency Security Scan
   dependency-scan:
@@ -277,9 +280,10 @@ jobs:
       if: success() || failure()
       with:
         name: All Test Results Summary
-        path: 'TestResults/*.trx'
+        path: 'TestResults/**/*.trx'
         reporter: dotnet-trx
         fail-on-error: false
+        fail-on-empty: false
     
     - name: 📈 Combined Code Coverage
       uses: codecov/codecov-action@v4

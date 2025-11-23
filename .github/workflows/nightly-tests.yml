@@ -43,9 +43,10 @@ jobs:
       if: success() || failure()
       with:
         name: Nightly Test Results
-        path: 'TestResults/*.trx'
+        path: 'TestResults/**/*.trx'
         reporter: dotnet-trx
         fail-on-error: false
+        fail-on-empty: false
     
     - name: 📈 Coverage Report
       uses: codecov/codecov-action@v4
@@ -89,9 +90,10 @@ jobs:
       if: success() || failure()
       with:
         name: E2E Test Results
-        path: 'TestResults/*.trx'
+        path: 'TestResults/**/*.trx'
         reporter: dotnet-trx
         fail-on-error: false
+        fail-on-empty: false
 
   stress-tests:
     name: Stress Tests
@@ -126,9 +128,10 @@ jobs:
       if: success() || failure()
       with:
         name: Stress Test Results
-        path: 'TestResults/*.trx'
+        path: 'TestResults/**/*.trx'
         reporter: dotnet-trx
         fail-on-error: false
+        fail-on-empty: false
 
   benchmark-tests:
     name: Performance Benchmarks

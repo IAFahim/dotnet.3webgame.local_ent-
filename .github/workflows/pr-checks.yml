@@ -106,9 +106,10 @@ jobs:
       if: success() || failure()
       with:
         name: PR Test Results
-        path: 'TestResults/*.trx'
+        path: 'TestResults/**/*.trx'
         reporter: dotnet-trx
         fail-on-error: false
+        fail-on-empty: false
     
     - name: 📈 Coverage Comparison
       uses: codecov/codecov-action@v4
