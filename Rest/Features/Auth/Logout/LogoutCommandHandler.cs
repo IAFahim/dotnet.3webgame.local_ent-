@@ -2,12 +2,14 @@ using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Rest.Common;
+using Rest.Data;
 using Rest.Models;
 
 namespace Rest.Features.Auth.Logout;
 
 public sealed class LogoutCommandHandler(
     UserManager<ApplicationUser> userManager,
+    ApplicationDbContext dbContext,
     ILogger<LogoutCommandHandler> logger)
     : IRequestHandler<LogoutCommand, Result>
 {
@@ -28,7 +30,8 @@ public sealed class LogoutCommandHandler(
             token.Revoked = DateTime.UtcNow;
         }
 
-        await userManager.UpdateAsync(user);
+        dbContext.Entry(user).State = EntityState.Modified;
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("User {Username} logged out and all sessions revoked.", user.UserName);
 

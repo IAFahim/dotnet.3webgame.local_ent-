@@ -2,12 +2,14 @@ using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Rest.Common;
+using Rest.Data;
 using Rest.Models;
 
 namespace Rest.Features.Auth.ChangePassword;
 
 public sealed class ChangePasswordCommandHandler(
     UserManager<ApplicationUser> userManager,
+    ApplicationDbContext dbContext,
     ILogger<ChangePasswordCommandHandler> logger)
     : IRequestHandler<ChangePasswordCommand, Result>
 {
@@ -40,8 +42,9 @@ public sealed class ChangePasswordCommandHandler(
             token.Revoked = DateTime.UtcNow;
         }
         
-        // Update user with revoked tokens (user is already tracked)
-        await userManager.UpdateAsync(user);
+        // Update user with revoked tokens
+        dbContext.Entry(user).State = EntityState.Modified;
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("Password changed successfully for user {Username}", user.UserName);
         return Result.Success();

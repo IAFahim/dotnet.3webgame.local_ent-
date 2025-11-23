@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Rest.Data;
 
 namespace Rest.Tests.Helpers;
@@ -23,7 +22,7 @@ public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgra
             }
 
             // Add ApplicationDbContext using an in-memory database for testing
-            services.AddDbContext<ApplicationDbContext>(options =>
+            services.AddDbContext<ApplicationDbContext>((sp, options) =>
             {
                 options.UseInMemoryDatabase($"InMemoryTest_{Guid.NewGuid()}");
             });

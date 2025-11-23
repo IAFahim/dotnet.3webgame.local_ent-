@@ -1,10 +1,10 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text;
 using FluentAssertions;
 using Microsoft.IdentityModel.Tokens;
-using NUnit.Framework;
 using Rest.Features.Auth.Register;
 using Rest.Tests.Helpers;
 
@@ -37,9 +37,11 @@ public class JwtSecurityTests
         var token = await RegisterAndGetToken();
 
         // Assert
+        token.Should().NotBeNullOrEmpty("registration should return a valid token");
+
         var tokenHandler = new JwtSecurityTokenHandler();
-        var jwtToken = tokenHandler.ReadJwtToken(token);
-        
+        var jwtToken = tokenHandler.ReadJwtToken(token!);
+
         jwtToken.Header.Alg.Should().Be(SecurityAlgorithms.HmacSha256);
     }
 
@@ -48,9 +50,11 @@ public class JwtSecurityTests
     {
         // Arrange
         var validToken = await RegisterAndGetToken();
-        
+
+        validToken.Should().NotBeNullOrEmpty("registration should return a valid token");
+
         // Tamper with token by changing one character
-        var tamperedToken = validToken[..^1] + "X";
+        var tamperedToken = validToken![..^1] + "X";
 
         _client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tamperedToken);
@@ -68,12 +72,14 @@ public class JwtSecurityTests
         // Arrange - Create a token that's already expired
         var tokenHandler = new JwtSecurityTokenHandler();
         var key = Encoding.UTF8.GetBytes("SuperSecretKeyForTesting1234567890123456");
-        
+
         var tokenDescriptor = new SecurityTokenDescriptor
         {
+            Subject = new ClaimsIdentity(new[] { new Claim(ClaimTypes.Name, "testuser") }),
+            NotBefore = DateTime.UtcNow.AddMinutes(-20),
             Expires = DateTime.UtcNow.AddMinutes(-10), // Already expired
             SigningCredentials = new SigningCredentials(
-                new SymmetricSecurityKey(key), 
+                new SymmetricSecurityKey(key),
                 SecurityAlgorithms.HmacSha256Signature)
         };
 
@@ -97,9 +103,11 @@ public class JwtSecurityTests
         var token = await RegisterAndGetToken();
 
         // Assert
+        token.Should().NotBeNullOrEmpty("registration should return a valid token");
+
         var tokenHandler = new JwtSecurityTokenHandler();
-        var jwtToken = tokenHandler.ReadJwtToken(token);
-        
+        var jwtToken = tokenHandler.ReadJwtToken(token!);
+
         jwtToken.Claims.Should().Contain(c => c.Type == JwtRegisteredClaimNames.Sub);
         jwtToken.Claims.Should().Contain(c => c.Type == JwtRegisteredClaimNames.UniqueName);
         jwtToken.Claims.Should().Contain(c => c.Type == JwtRegisteredClaimNames.Email);
@@ -112,9 +120,11 @@ public class JwtSecurityTests
     {
         // Arrange
         var token = await RegisterAndGetToken();
-        
-        // Don't use "Bearer" prefix
-        _client.DefaultRequestHeaders.Add("Authorization", token);
+
+        token.Should().NotBeNullOrEmpty("registration should return a valid token");
+
+        // Don't use "Bearer" prefix (using TryAddWithoutValidation to avoid format exceptions)
+        _client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", token!);
 
         // Act
         var response = await _client.PostAsync("/api/v1/auth/logout", null);

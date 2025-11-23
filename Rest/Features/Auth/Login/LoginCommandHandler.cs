@@ -1,6 +1,8 @@
 using MediatR;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Rest.Common;
+using Rest.Data;
 using Rest.Models;
 using Rest.Services;
 
@@ -9,6 +11,7 @@ namespace Rest.Features.Auth.Login;
 public sealed class LoginCommandHandler(
     UserManager<ApplicationUser> userManager,
     SignInManager<ApplicationUser> signInManager,
+    ApplicationDbContext dbContext,
     ITokenService tokenService,
     TimeProvider timeProvider,
     ILogger<LoginCommandHandler> logger)
@@ -35,18 +38,30 @@ public sealed class LoginCommandHandler(
             return InvalidCreds();
         }
 
+        // Reload user with RefreshTokens to ensure we have the collection
+        user = await userManager.Users
+            .Include(u => u.RefreshTokens)
+            .FirstOrDefaultAsync(u => u.Id == user.Id, cancellationToken) ?? user;
+
         var accessToken = tokenService.GenerateJwtToken(user);
         var refreshToken = tokenService.GenerateRefreshToken();
 
         user.RefreshTokens.Add(refreshToken);
 
-        user.RefreshTokens.RemoveAll(t =>
-            !t.IsActive &&
-            t.Created.AddDays(2) <= timeProvider.GetUtcNow().DateTime);
+        var expiredTokens = user.RefreshTokens
+            .Where(t => !t.IsActive && t.Created.AddDays(2) <= timeProvider.GetUtcNow().DateTime)
+            .ToList();
+        
+        foreach (var token in expiredTokens)
+        {
+            user.RefreshTokens.Remove(token);
+        }
 
         user.LastLoginAt = timeProvider.GetUtcNow().DateTime;
 
-        await userManager.UpdateAsync(user);
+        // Explicitly save changes to the DbContext to ensure owned entities are persisted
+        dbContext.Entry(user).State = EntityState.Modified;
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("User {Username} logged in successfully", user.UserName);
 

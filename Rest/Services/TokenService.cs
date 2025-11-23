@@ -32,8 +32,8 @@ public sealed class TokenService(IOptions<JwtSettings> jwtOptions, TimeProvider 
             _settings.Issuer,
             _settings.Audience,
             claims,
-            timeProvider.GetUtcNow().DateTime,
-            timeProvider.GetUtcNow().AddHours(_settings.ExpirationHours).DateTime,
+            timeProvider.GetUtcNow().UtcDateTime,
+            timeProvider.GetUtcNow().AddHours(_settings.ExpirationHours).UtcDateTime,
             credentials
         );
 

@@ -48,7 +48,6 @@ public static class ServiceExtensions
                 .UseSnakeCaseNamingConvention()
                 .EnableSensitiveDataLogging(false)
                 .EnableDetailedErrors(false)
-                .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking)
                 .ConfigureWarnings(warnings =>
                     warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
         });

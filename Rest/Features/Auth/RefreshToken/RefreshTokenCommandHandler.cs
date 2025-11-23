@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Rest.Common;
+using Rest.Data;
 using Rest.Models;
 using Rest.Services;
 
@@ -10,6 +11,7 @@ namespace Rest.Features.Auth.RefreshToken;
 
 public sealed class RefreshTokenCommandHandler(
     UserManager<ApplicationUser> userManager,
+    ApplicationDbContext dbContext,
     ITokenService tokenService,
     ILogger<RefreshTokenCommandHandler> logger)
     : IRequestHandler<RefreshTokenCommand, Result<AuthResponse>>
@@ -44,8 +46,12 @@ public sealed class RefreshTokenCommandHandler(
         if (storedToken.Revoked != null)
         {
             logger.LogCritical("Reuse of revoked token detected for user {User}. Revoking all sessions.", user.Id);
-            user.RefreshTokens.ForEach(t => t.Revoked = DateTime.UtcNow);
-            await userManager.UpdateAsync(user);
+            foreach (var token in user.RefreshTokens)
+            {
+                token.Revoked = DateTime.UtcNow;
+            }
+            dbContext.Entry(user).State = EntityState.Modified;
+            await dbContext.SaveChangesAsync(cancellationToken);
             return Result.Failure<AuthResponse>(new Error("Auth.SecurityAlert", "Security alert. Log in again."));
         }
 
@@ -63,7 +69,8 @@ public sealed class RefreshTokenCommandHandler(
 
         var newAccessToken = tokenService.GenerateJwtToken(user);
 
-        await userManager.UpdateAsync(user);
+        dbContext.Entry(user).State = EntityState.Modified;
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         return new AuthResponse(
             newAccessToken,

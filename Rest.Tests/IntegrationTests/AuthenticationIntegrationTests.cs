@@ -11,7 +11,7 @@ using Rest.Tests.Helpers;
 namespace Rest.Tests.IntegrationTests;
 
 [TestFixture]
-public class AuthenticationIntegrationTests
+public class AuthenticationIntegrationTests : IDisposable
 {
     private TestWebApplicationFactory<Program> _factory = null!;
     private HttpClient _client = null!;
@@ -46,7 +46,7 @@ public class AuthenticationIntegrationTests
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        
+
         var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
         authResponse.Should().NotBeNull();
         authResponse!.AccessToken.Should().NotBeNullOrEmpty();
@@ -112,7 +112,7 @@ public class AuthenticationIntegrationTests
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        
+
         var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
         authResponse.Should().NotBeNull();
         authResponse!.AccessToken.Should().NotBeNullOrEmpty();
@@ -147,7 +147,7 @@ public class AuthenticationIntegrationTests
 
         var token = await RegisterAndGetToken(username, email, oldPassword);
 
-        _client.DefaultRequestHeaders.Authorization = 
+        _client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
         var changePasswordRequest = new
@@ -169,7 +169,7 @@ public class AuthenticationIntegrationTests
     {
         // Arrange
         _client.DefaultRequestHeaders.Authorization = null;
-        
+
         var changePasswordRequest = new
         {
             CurrentPassword = "OldPassword123!",
@@ -208,5 +208,10 @@ public class AuthenticationIntegrationTests
         var response = await _client.PostAsJsonAsync("/api/v1/auth/register", request);
         var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
         return authResponse!.AccessToken;
+    }
+
+    public void Dispose()
+    {
+        // Already disposed in OneTimeTearDown
     }
 }

@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 using Rest.Common;
+using Rest.Data;
 using Rest.Models;
 using Rest.Services;
 
@@ -8,6 +9,7 @@ namespace Rest.Features.Auth.Register;
 
 public sealed class RegisterCommandHandler(
     UserManager<ApplicationUser> userManager,
+    ApplicationDbContext dbContext,
     ITokenService tokenService,
     ILogger<RegisterCommandHandler> logger)
     : IRequestHandler<RegisterCommand, Result<AuthResponse>>
@@ -37,7 +39,14 @@ public sealed class RegisterCommandHandler(
         var refreshToken = tokenService.GenerateRefreshToken();
 
         user.RefreshTokens.Add(refreshToken);
-        await userManager.UpdateAsync(user);
+        
+        // Explicitly attach and update the user in the DbContext to ensure owned entities are persisted
+        if (dbContext.Entry(user).State == Microsoft.EntityFrameworkCore.EntityState.Detached)
+        {
+            dbContext.Users.Attach(user);
+        }
+        dbContext.Entry(user).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("User {Username} registered successfully", user.UserName);
 
