@@ -1,0 +1,43 @@
+Rest.Tests (29 tests) Failed: 14 tests failed
+  Rest.Tests (29 tests) Failed: 14 tests failed
+    E2ETests (2 tests) Failed: 2 tests failed
+      CompleteAuthFlowTests (2 tests) Failed: One or more child tests had errors: 2 tests failed
+        CompleteUserJourney_RegisterLoginRefreshLogout_ShouldWorkEndToEnd Failed: Expected registerResponse.StatusCode to be HttpStatusCode.OK {value: 200}, but found HttpStatusCode.NotFound {value: 404}.
+        LoginWithWrongPassword_MultipleTimes_ShouldLockAccount Failed: Expected response.StatusCode to be HttpStatusCode.Unauthorized {value: 401}, but found HttpStatusCode.NotFound {value: 404}.
+    IntegrationTests (7 tests) Failed: 7 tests failed
+      AuthenticationIntegrationTests (7 tests) Failed: One or more child tests had errors: 7 tests failed
+        ChangePassword_WithoutToken_ShouldReturnUnauthorized Failed: Expected response.StatusCode to be HttpStatusCode.Unauthorized {value: 401}, but found HttpStatusCode.NotFound {value: 404}.
+        ChangePassword_WithValidToken_ShouldReturnSuccess Failed: System.Text.Json.JsonException : The input does not contain any JSON tokens. Expected the input to start with a valid JSON token, when isFinalBlock is true. Path: $ | LineNumber: 0 | BytePositionInLin…
+        Login_WithInvalidCredentials_ShouldReturnUnauthorized Failed: Expected response.StatusCode to be HttpStatusCode.Unauthorized {value: 401}, but found HttpStatusCode.NotFound {value: 404}.
+        Login_WithValidCredentials_ShouldReturnSuccess Failed: Expected response.StatusCode to be HttpStatusCode.OK {value: 200}, but found HttpStatusCode.NotFound {value: 404}.
+        Register_WithInvalidEmail_ShouldReturnBadRequest Failed: Expected response.StatusCode to be HttpStatusCode.BadRequest {value: 400}, but found HttpStatusCode.NotFound {value: 404}.
+        Register_WithValidData_ShouldReturnSuccess Failed: Expected response.StatusCode to be HttpStatusCode.OK {value: 200}, but found HttpStatusCode.NotFound {value: 404}.
+        Register_WithWeakPassword_ShouldReturnBadRequest Failed: Expected response.StatusCode to be HttpStatusCode.BadRequest {value: 400}, but found HttpStatusCode.NotFound {value: 404}.
+    PerformanceTests (5 tests) Success
+      ApiLoadTests (2 tests) Success
+        HealthEndpoint_ShouldHandle1000SequentialRequests Success
+        HealthEndpoint_ShouldHandle100ConcurrentRequests Success
+      TokenGenerationPerformanceTests (3 tests) Success
+        ConcurrentTokenGeneration_ShouldBeThreadSafe Success
+        RunBenchmarks Ignored: Performance test - run manually
+        TokenGeneration_ShouldCompleteUnder100Milliseconds Success
+    SecurityTests (8 tests) Failed: 5 tests failed
+      JwtSecurityTests (5 tests) Failed: One or more child tests had errors: 5 tests failed
+        ExpiredToken_ShouldBeRejected Failed: Expected response.StatusCode to be HttpStatusCode.Unauthorized {value: 401}, but found HttpStatusCode.NotFound {value: 404}.
+        GeneratedToken_ShouldUseHS256Algorithm Failed: Expected response.StatusCode to be HttpStatusCode.OK {value: 200}, but found HttpStatusCode.NotFound {value: 404}.
+        TamperedToken_ShouldBeRejected Failed: Expected response.StatusCode to be HttpStatusCode.OK {value: 200}, but found HttpStatusCode.NotFound {value: 404}.
+        Token_ShouldContainRequiredClaims Failed: Expected response.StatusCode to be HttpStatusCode.OK {value: 200}, but found HttpStatusCode.NotFound {value: 404}.
+        TokenWithoutBearer_ShouldBeRejected Failed: Expected response.StatusCode to be HttpStatusCode.OK {value: 200}, but found HttpStatusCode.NotFound {value: 404}.
+      SecurityHeadersTests (3 tests) Success
+        Response_ShouldIncludePermissionsPolicyHeader Success
+        Response_ShouldIncludeSecurityHeaders Success
+        Response_ShouldNotIncludeServerHeader Success
+    UnitTests (7 tests) Success
+      TokenServiceTests (7 tests) Success
+        GenerateJwtToken_ShouldExpireAfterConfiguredHours Success
+        GenerateJwtToken_ShouldReturnValidToken Success
+        GenerateRefreshToken_ShouldGenerateUniqueTokens Success
+        GenerateRefreshToken_ShouldReturnValidToken Success
+        RefreshToken_IsActive_ShouldReturnFalseForExpiredToken Success
+        RefreshToken_IsActive_ShouldReturnFalseForRevokedToken Success
+        RefreshToken_IsActive_ShouldReturnTrueForValidToken Success

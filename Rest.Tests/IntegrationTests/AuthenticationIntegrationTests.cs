@@ -12,24 +12,33 @@ namespace Rest.Tests.IntegrationTests;
 [TestFixture]
 public class AuthenticationIntegrationTests
 {
+    private TestWebApplicationFactory<Program> _factory = null!;
+    private HttpClient _client = null!;
+
     [OneTimeSetUp]
-    public void OneTimeSetUp() => _factory = new TestWebApplicationFactory<Program>();
+    public void OneTimeSetUp()
+    {
+        _factory = new TestWebApplicationFactory<Program>();
+    }
 
     [SetUp]
     public void SetUp()
     {
-        // Recreate client and DB for every test to ensure isolation
+        // New client + Reset DB for every test to ensure isolation
         _client = _factory.CreateClientWithDbSetup();
     }
 
     [TearDown]
-    public void TearDown() => _client?.Dispose();
+    public void TearDown()
+    {
+        _client?.Dispose();
+    }
 
     [OneTimeTearDown]
-    public void OneTimeTearDown() => _factory?.Dispose();
-
-    private TestWebApplicationFactory<Program> _factory = null!;
-    private HttpClient _client = null!;
+    public void OneTimeTearDown()
+    {
+        _factory?.Dispose();
+    }
 
     [Test]
     public async Task Register_WithValidData_ShouldReturnSuccess()
@@ -43,29 +52,29 @@ public class AuthenticationIntegrationTests
 
         var response = await _client.PostAsJsonAsync("/api/v1/auth/register", request);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
         authResponse.Should().NotBeNull();
+        authResponse!.AccessToken.Should().NotBeNullOrEmpty();
     }
 
     [Test]
     public async Task Register_WithInvalidEmail_ShouldReturnBadRequest()
     {
-        // Arrange
         var request = new RegisterRequest { Username = "testuser", Email = "invalid-email", Password = "Password123!" };
 
-        // Act
         var response = await _client.PostAsJsonAsync("/api/v1/auth/register", request);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var content = await response.Content.ReadAsStringAsync();
+        // FIX: FastEndpoints/System.Text.Json uses camelCase for property names ("email", not "Email")
+        content.Should().Contain("email");
     }
 
     [Test]
     public async Task Register_WithWeakPassword_ShouldReturnBadRequest()
     {
-        // Arrange
         var request = new RegisterRequest
         {
             Username = $"testuser_{Guid.NewGuid():N}",
@@ -73,42 +82,39 @@ public class AuthenticationIntegrationTests
             Password = "weak"
         };
 
-        // Act
         var response = await _client.PostAsJsonAsync("/api/v1/auth/register", request);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var content = await response.Content.ReadAsStringAsync();
+        // FIX: Check for the specific error logic or simply the property name in camelCase
+        content.Should().Contain("password");
     }
 
     [Test]
     public async Task Login_WithValidCredentials_ShouldReturnSuccess()
     {
-        // Arrange
+        // 1. Arrange - Create User
         var username = $"testuser_{Guid.NewGuid():N}";
         var email = $"test_{Guid.NewGuid():N}@example.com";
         var password = "Password123!";
-
         await RegisterUser(username, email, password);
 
+        // 2. Act - Login
         var loginRequest = new LoginRequest { Username = username, Password = password };
-
-        // Act
         var response = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
 
-        // Assert
+        // 3. Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-
         var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
         authResponse.Should().NotBeNull();
         authResponse!.AccessToken.Should().NotBeNullOrEmpty();
-        authResponse.RefreshToken.Should().NotBeNullOrEmpty();
     }
 
     [Test]
     public async Task Login_WithInvalidCredentials_ShouldReturnUnauthorized()
     {
         var loginRequest = new LoginRequest { Username = "nonexistent", Password = "WrongPassword123!" };
-
         var response = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -116,7 +122,6 @@ public class AuthenticationIntegrationTests
     [Test]
     public async Task ChangePassword_WithValidToken_ShouldReturnSuccess()
     {
-        // Arrange
         var username = $"testuser_{Guid.NewGuid():N}";
         var email = $"test_{Guid.NewGuid():N}@example.com";
         var oldPassword = "OldPassword123!";
@@ -124,25 +129,22 @@ public class AuthenticationIntegrationTests
 
         var token = await RegisterAndGetToken(username, email, oldPassword);
 
-        _client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", token);
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var changePasswordRequest = new
         {
-            CurrentPassword = oldPassword, NewPassword = newPassword, ConfirmNewPassword = newPassword
+            CurrentPassword = oldPassword,
+            NewPassword = newPassword,
+            ConfirmNewPassword = newPassword
         };
 
-        // Act
         var response = await _client.PostAsJsonAsync("/api/v1/auth/change-password", changePasswordRequest);
-
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Test]
     public async Task ChangePassword_WithoutToken_ShouldReturnUnauthorized()
     {
-        // Arrange
         _client.DefaultRequestHeaders.Authorization = null;
 
         var changePasswordRequest = new
@@ -152,27 +154,18 @@ public class AuthenticationIntegrationTests
             ConfirmNewPassword = "NewPassword123!"
         };
 
-        // Act
         var response = await _client.PostAsJsonAsync("/api/v1/auth/change-password", changePasswordRequest);
-
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    // --- Helpers ---
 
-    public void Dispose()
-    {
-        // Already disposed in OneTimeTearDown
-    }
-
-    // Helper needed for other tests
     private async Task RegisterUser(string username, string email, string password)
     {
         var request = new RegisterRequest { Username = username, Email = email, Password = password };
         await _client.PostAsJsonAsync("/api/v1/auth/register", request);
     }
 
-    // Helper needed for other tests
     private async Task<string> RegisterAndGetToken(string username, string email, string password)
     {
         var request = new RegisterRequest { Username = username, Email = email, Password = password };

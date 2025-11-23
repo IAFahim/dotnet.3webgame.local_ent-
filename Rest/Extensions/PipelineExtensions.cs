@@ -3,7 +3,6 @@ using FastEndpoints.Swagger;
 using Scalar.AspNetCore;
 using Serilog;
 using Rest.Middleware;
-using Rest.Extensions; // For SeedDatabaseAsync
 
 namespace Rest.Extensions;
 
@@ -13,18 +12,14 @@ public static class PipelineExtensions
     {
         // 1. Security & Logging
         app.UseSecurityHeaders();
-        app.UseExceptionHandler();
+        app.UseExceptionHandler(); // This must use the handler we defined in Services
         app.UseSerilogRequestLogging();
 
-        // 2. Development Tools (Swagger/Scalar/Seeding)
+        // 2. Development Tools
         if (app.Environment.IsDevelopment())
         {
-            app.UseDeveloperExceptionPage();
-
-            // Generate JSON
+            // app.UseDeveloperExceptionPage(); // Disable this to test your custom handler
             app.UseSwaggerGen();
-
-            // Scalar UI
             app.MapScalarApiReference(options =>
             {
                 options
@@ -47,16 +42,18 @@ public static class PipelineExtensions
         app.UseCors("AllowAll");
         app.UseResponseCompression();
         app.UseResponseCaching();
+
+        // RATE LIMITING: Check config to ensure tests aren't blocked
+        // (Tests usually disable this via appsettings or Factory)
         app.UseRateLimiter();
 
         app.UseAuthentication();
-        app.UseAuthorization();
+        app.UseAuthorization(); // <--- CRITICAL: Must be before FastEndpoints
 
         // 4. Endpoints
-        app.UseFastEndpoints(c =>
-        {
-            c.Endpoints.RoutePrefix = "api";
-        });
+        // FIX: Removed the RoutePrefix = "api" block.
+        // Your endpoints already have "/api/..." in their definition.
+        app.UseFastEndpoints();
 
         app.MapHealthChecks("/health").AllowAnonymous();
     }
