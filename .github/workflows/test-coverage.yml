@@ -70,12 +70,14 @@ jobs:
     
     - name: 📈 Upload to Codecov
       uses: codecov/codecov-action@v4
+      if: success() || failure()
       with:
         files: ./coverage/**/coverage.opencover.xml
         flags: unittests,integrationtests
         name: coverage-report
         fail_ci_if_error: false
         verbose: true
+      continue-on-error: true
     
     - name: 🎯 Coverage Badge
       if: github.ref == 'refs/heads/main'

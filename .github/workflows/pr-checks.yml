@@ -98,16 +98,17 @@ jobs:
           --no-restore \
           --logger "trx;LogFileName=pr-test-results.trx" \
           --logger "console;verbosity=normal" \
+          --results-directory ./TestResults \
           --collect:"XPlat Code Coverage"
     
     - name: 📊 Test Results
       uses: dorny/test-reporter@v1
-      if: always()
+      if: success() || failure()
       with:
         name: PR Test Results
-        path: '**/pr-test-results.trx'
+        path: 'TestResults/*.trx'
         reporter: dotnet-trx
-        fail-on-error: true
+        fail-on-error: false
     
     - name: 📈 Coverage Comparison
       uses: codecov/codecov-action@v4

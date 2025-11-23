@@ -34,15 +34,16 @@ jobs:
           --no-restore \
           --logger "trx;LogFileName=nightly-test-results.trx" \
           --logger "console;verbosity=detailed" \
+          --results-directory ./TestResults \
           --collect:"XPlat Code Coverage" \
           -- RunConfiguration.CollectSourceInformation=true
     
     - name: 📊 Test Report
       uses: dorny/test-reporter@v1
-      if: always()
+      if: success() || failure()
       with:
         name: Nightly Test Results
-        path: '**/nightly-test-results.trx'
+        path: 'TestResults/*.trx'
         reporter: dotnet-trx
         fail-on-error: false
     
@@ -78,15 +79,16 @@ jobs:
           --configuration Release \
           --no-restore \
           --logger "trx;LogFileName=e2e-test-results.trx" \
-          --logger "console;verbosity=detailed"
+          --logger "console;verbosity=detailed" \
+          --results-directory ./TestResults
       continue-on-error: true
     
     - name: 📊 E2E Test Report
       uses: dorny/test-reporter@v1
-      if: always()
+      if: success() || failure()
       with:
         name: E2E Test Results
-        path: '**/e2e-test-results.trx'
+        path: 'TestResults/*.trx'
         reporter: dotnet-trx
         fail-on-error: false
 
@@ -114,15 +116,16 @@ jobs:
           --configuration Release \
           --no-restore \
           --logger "trx;LogFileName=stress-test-results.trx" \
-          --logger "console;verbosity=detailed"
+          --logger "console;verbosity=detailed" \
+          --results-directory ./TestResults
       continue-on-error: true
     
     - name: 📊 Stress Test Report
       uses: dorny/test-reporter@v1
-      if: always()
+      if: success() || failure()
       with:
         name: Stress Test Results
-        path: '**/stress-test-results.trx'
+        path: 'TestResults/*.trx'
         reporter: dotnet-trx
         fail-on-error: false
 

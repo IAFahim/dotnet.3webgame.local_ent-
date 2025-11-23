@@ -77,17 +77,18 @@ jobs:
           --no-restore \
           --logger "trx;LogFileName=unit-test-results.trx" \
           --logger "console;verbosity=detailed" \
+          --results-directory ./TestResults \
           --collect:"XPlat Code Coverage" \
           -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
     
     - name: 📊 Generate Test Report
       uses: dorny/test-reporter@v1
-      if: always()
+      if: success() || failure()
       with:
         name: Unit Test Results
-        path: '**/unit-test-results.trx'
+        path: 'TestResults/*.trx'
         reporter: dotnet-trx
-        fail-on-error: true
+        fail-on-error: false
     
     - name: 📈 Code Coverage Report
       uses: codecov/codecov-action@v4
@@ -124,16 +125,17 @@ jobs:
           --no-restore \
           --logger "trx;LogFileName=integration-test-results.trx" \
           --logger "console;verbosity=detailed" \
+          --results-directory ./TestResults \
           --collect:"XPlat Code Coverage"
     
     - name: 📊 Generate Test Report
       uses: dorny/test-reporter@v1
-      if: always()
+      if: success() || failure()
       with:
         name: Integration Test Results
-        path: '**/integration-test-results.trx'
+        path: 'TestResults/*.trx'
         reporter: dotnet-trx
-        fail-on-error: true
+        fail-on-error: false
     
     - name: 📈 Code Coverage Report
       uses: codecov/codecov-action@v4
@@ -169,15 +171,16 @@ jobs:
           --configuration Release \
           --no-restore \
           --logger "trx;LogFileName=security-test-results.trx" \
-          --logger "console;verbosity=detailed"
+          --logger "console;verbosity=detailed" \
+          --results-directory ./TestResults
       continue-on-error: true  # Security tests may fail in CI environment
     
     - name: 📊 Generate Test Report
       uses: dorny/test-reporter@v1
-      if: always()
+      if: success() || failure()
       with:
         name: Security Test Results
-        path: '**/security-test-results.trx'
+        path: 'TestResults/*.trx'
         reporter: dotnet-trx
         fail-on-error: false
 
@@ -269,10 +272,10 @@ jobs:
     
     - name: 📊 Test Summary
       uses: dorny/test-reporter@v1
-      if: always()
+      if: success() || failure()
       with:
         name: All Test Results Summary
-        path: '**/all-test-results.trx'
+        path: 'TestResults/*.trx'
         reporter: dotnet-trx
         fail-on-error: false
     
@@ -287,12 +290,10 @@ jobs:
     
     - name: 📤 Upload Test Results
       uses: actions/upload-artifact@v4
-      if: always()
+      if: success() || failure()
       with:
         name: test-results
-        path: |
-          **/TestResults/
-          **/*.trx
+        path: TestResults/
         retention-days: 30
 
   # Performance Baseline
