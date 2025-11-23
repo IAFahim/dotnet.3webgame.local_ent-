@@ -16,7 +16,12 @@ public sealed class RegisterCommandHandler(
     {
         logger.LogInformation("Registering user: {Username}", request.Username);
 
-        var user = new ApplicationUser { UserName = request.Username, Email = request.Email };
+        var user = new ApplicationUser 
+        { 
+            UserName = request.Username, 
+            Email = request.Email 
+        };
+
         var result = await userManager.CreateAsync(user, request.Password);
 
         if (!result.Succeeded)
@@ -25,9 +30,18 @@ public sealed class RegisterCommandHandler(
             return Result.Failure<AuthResponse>(new Error("Auth.RegisterFailed", error));
         }
 
-        var token = tokenService.GenerateJwtToken(user);
-        
-        // Note: Ideally use a Refresh Token flow here for "Perfect" security
-        return new AuthResponse(token, DateTime.UtcNow.AddHours(2), user.UserName!, user.Email!);
+        var accessToken = tokenService.GenerateJwtToken(user);
+        var refreshToken = tokenService.GenerateRefreshToken();
+
+        user.RefreshTokens.Add(refreshToken);
+        await userManager.UpdateAsync(user);
+
+        return new AuthResponse(
+            accessToken, 
+            refreshToken.Token, 
+            refreshToken.Expires, 
+            user.UserName!, 
+            user.Email!
+        );
     }
 }

@@ -1,39 +1,30 @@
 using System.Security.Claims;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
-using Rest.Common;
+using Rest.Extensions;
 using Rest.Features.Auth.ChangePassword;
 using Rest.Features.Auth.Login;
+using Rest.Features.Auth.Logout; // <--- Ensure this is here
+using Rest.Features.Auth.RefreshToken;
 using Rest.Features.Auth.Register;
 using Rest.Models;
+using LoginRequest = Rest.Features.Auth.Login.LoginRequest;
+using RegisterRequest = Rest.Features.Auth.Register.RegisterRequest;
 
 namespace Rest.Controllers;
 
 [ApiController]
-[Route("api/v1/auth")] 
-[EnableRateLimiting("fixed")] 
-public class AuthController(
-    ISender sender,
-    SignInManager<ApplicationUser> signInManager) : ControllerBase
+[Route("api/v1/auth")]
+public class AuthController(ISender sender) : ControllerBase
 {
     [HttpPost("register")]
     [AllowAnonymous]
-    public async Task<IActionResult> Register([FromBody] Dots request)
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
-        // Map DTO to Command
         var command = new RegisterCommand(request.Username, request.Email, request.Password);
-        
         var result = await sender.Send(command);
-
-        if (result.IsFailure)
-        {
-            return BadRequest(new ProblemDetails { Title = "Registration Failed", Detail = result.Error.Description });
-        }
-
-        return Ok(result.Value);
+        return result.IsFailure ? Problem(result.Error) : Ok(result.Value);
     }
 
     [HttpPost("login")]
@@ -41,32 +32,27 @@ public class AuthController(
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var command = new LoginCommand(request.Username, request.Password);
-        
         var result = await sender.Send(command);
-
-        if (result.IsFailure)
-        {
-            return Unauthorized(new ProblemDetails { Title = "Auth Failed", Detail = result.Error.Description });
-        }
-
-        return Ok(result.Value);
+        return result.IsFailure ? Unauthorized(ToProblem(result.Error)) : Ok(result.Value);
     }
 
-    [HttpPost("logout")]
-    [Authorize]
-    public async Task<IActionResult> Logout()
+    [HttpPost("refresh")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
     {
-        await signInManager.SignOutAsync();
-        return Ok(new { message = "Logged out successfully" });
+        var command = new RefreshTokenCommand(request.AccessToken, request.RefreshToken);
+        var result = await sender.Send(command);
+        return result.IsFailure ? Unauthorized(ToProblem(result.Error)) : Ok(result.Value);
     }
-
+    
+    
     [HttpPost("change-password")]
     [Authorize]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
     {
-        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrEmpty(userId)) return Unauthorized();
-
+        // No try-catch. Let specific errors bubble up.
+        var userId = User.GetUserId(); 
+        
         var command = new ChangePasswordCommand(
             userId, 
             request.CurrentPassword, 
@@ -75,11 +61,25 @@ public class AuthController(
 
         var result = await sender.Send(command);
 
-        if (result.IsFailure)
-        {
-            return BadRequest(new ProblemDetails { Title = "Operation Failed", Detail = result.Error.Description });
-        }
-
-        return Ok(new { message = "Password changed successfully" });
+        // Return specific error if logic fails (e.g., wrong current password)
+        return result.IsFailure ? BadRequest(ToProblem(result.Error)) : Ok(new { message = "Password changed successfully" });
     }
+
+    [HttpPost("logout")]
+    [Authorize]
+    public async Task<IActionResult> Logout()
+    {
+        var userId = User.GetUserId();
+        var command = new LogoutCommand(userId);
+        await sender.Send(command);
+        
+        return Ok(new { message = "Logged out successfully." });
+    }
+    
+    private static ProblemDetails ToProblem(Rest.Common.Error error) =>
+        new() { Title = error.Code, Detail = error.Description, Type = error.Code };
+    
+    private ObjectResult Problem(Rest.Common.Error error) =>
+        BadRequest(ToProblem(error));
 }
+

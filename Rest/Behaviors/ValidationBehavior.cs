@@ -1,6 +1,7 @@
 using FluentValidation;
 using MediatR;
 using Rest.Common;
+using Rest.Exceptions; // Assuming you have a ValidationException definition
 
 namespace Rest.Behaviors;
 
@@ -14,18 +15,18 @@ public sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidat
 
         var context = new ValidationContext<TRequest>(request);
 
-        var validationFailures = await Task.WhenAll(
+        var failures = await Task.WhenAll(
             validators.Select(v => v.ValidateAsync(context, cancellationToken)));
 
-        var errors = validationFailures
+        var errors = failures
             .Where(result => !result.IsValid)
             .SelectMany(result => result.Errors)
-            .Select(failure => new ValidationFailure(failure.PropertyName, failure.ErrorMessage))
+            .Select(f => new ValidationFailure(f.PropertyName, f.ErrorMessage))
             .ToList();
 
         if (errors.Any())
         {
-            throw new Exceptions.ValidationException(errors);
+            throw new Rest.Exceptions.ValidationException(errors);
         }
 
         return await next();

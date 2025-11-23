@@ -8,8 +8,8 @@
 @host = http://{{hostname}}:{{port}}
 @contentType = application/json
 
-# 🎲 Generate Random User for Session
-@username = player_{{$randomInt}}
+# 📝 Config: Use a static user so Register & Login match
+@username = player_hero_01
 @password = Password123!
 
 # ==========================================
@@ -25,7 +25,7 @@ GET {{host}}/health
 # 🔐 AUTHENTICATION
 # ==========================================
 
-### Register New User
+### Register New User (Also saves token)
 POST {{host}}/api/v1/auth/register
 Content-Type: {{contentType}}
 
@@ -34,6 +34,14 @@ Content-Type: {{contentType}}
   "email": "{{username}}@game.com",
   "password": "{{password}}"
 }
+
+> {%
+    // 💾 Auto-save authentication token from Register
+    if (response.status === 200) {
+        client.global.set("auth_token", response.body.accessToken);
+        client.log("✅ Registered & Token saved: " + response.body.accessToken);
+    }
+%}
 
 ###
 
@@ -48,9 +56,13 @@ Content-Type: {{contentType}}
 }
 
 > {%
-    // 💾 Auto-save authentication token
-    client.global.set("auth_token", response.body.token);
-    client.log("Token saved: " + response.body.token);
+    // 💾 Auto-save authentication token from Login
+    if (response.status === 200) {
+        client.global.set("auth_token", response.body.accessToken); // FIX: property is 'accessToken'
+        client.log("✅ Logged in & Token saved: " + response.body.accessToken);
+    } else {
+        client.log("❌ Login Failed: " + response.status);
+    }
 %}
 
 ###
@@ -101,5 +113,3 @@ Content-Type: {{contentType}}
   "newPassword": "123",
   "confirmNewPassword": "123"
 }
-
-###

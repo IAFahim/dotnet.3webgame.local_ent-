@@ -1,5 +1,6 @@
 using System.Text;
 using FluentValidation;
+using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -18,38 +19,37 @@ public static class ServiceExtensions
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
     {
-        // 1. Core Utilities
+        // Services
         services.AddSingleton(TimeProvider.System);
-
-        // 2. Database & Interceptors
         services.AddScoped<AuditableEntityInterceptor>();
-        
+        services.AddScoped<ITokenService, TokenService>();
+
+        // JWT Configuration
+        var jwtSection = config.GetSection(JwtSettings.SectionName);
+        services.Configure<JwtSettings>(jwtSection);
+        var jwtSettings = jwtSection.Get<JwtSettings>();
+
+        // Database
+        var connectionString = config.GetConnectionString("DefaultConnection");
         services.AddDbContext<ApplicationDbContext>((sp, options) =>
         {
             var interceptor = sp.GetRequiredService<AuditableEntityInterceptor>();
-            options.UseInMemoryDatabase("GameAuthDb")
-                   .AddInterceptors(interceptor);
+            options.UseSqlite(connectionString)
+                   .AddInterceptors(interceptor)
+                   .UseSnakeCaseNamingConvention();
         });
 
-        // 3. Identity
-        services.AddIdentity<ApplicationUser, IdentityRole>(options =>
-            {
-                options.Password.RequireDigit = true;
-                options.Password.RequiredLength = 8;
-                options.User.RequireUniqueEmail = true;
-            })
-            .AddEntityFrameworkStores<ApplicationDbContext>()
-            .AddDefaultTokenProviders();
+        // Identity
+        services.AddIdentity<ApplicationUser, IdentityRole>(options => 
+        {
+            options.Password.RequireDigit = true;
+            options.Password.RequiredLength = 8;
+            options.User.RequireUniqueEmail = true;
+        })
+        .AddEntityFrameworkStores<ApplicationDbContext>()
+        .AddDefaultTokenProviders();
 
-        // 4. JWT Configuration
-        services.AddOptions<JwtSettings>()
-            .BindConfiguration(JwtSettings.SectionName)
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
-
-        var jwtSection = config.GetSection(JwtSettings.SectionName);
-        var key = jwtSection["Key"] ?? throw new InvalidOperationException("JWT Key missing");
-
+        // Authentication
         services.AddAuthentication(options =>
         {
             options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -57,69 +57,77 @@ public static class ServiceExtensions
         })
         .AddJwtBearer(options =>
         {
+            options.SaveToken = true;
+            // FIX: This stops .NET from renaming 'sub' to 'http://.../nameidentifier'
+            options.MapInboundClaims = false; 
+    
             options.TokenValidationParameters = new TokenValidationParameters
             {
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
                 ValidateIssuer = true,
-                ValidIssuer = jwtSection["Issuer"],
                 ValidateAudience = true,
-                ValidAudience = jwtSection["Audience"],
-                ClockSkew = TimeSpan.Zero
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                ValidIssuer = jwtSettings?.Issuer,
+                ValidAudience = jwtSettings?.Audience,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings?.Key!)),
+                ClockSkew = TimeSpan.Zero 
             };
         });
 
-        // 5. Application Services
-        services.AddScoped<ITokenService, TokenService>();
-
-        // 6. MediatR & Pipeline Behaviors
-        services.AddMediatR(cfg =>
-        {
-            cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);
-            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
-        });
-
-        // 7. Validators
-        services.AddValidatorsFromAssembly(typeof(Program).Assembly);
-
-        return services;
-    }
-    
-    public static IServiceCollection AddOpenApiDocs(this IServiceCollection services)
-    {
+        // OpenAPI Security Configuration (For Scalar/Swagger UI)
         services.AddOpenApi(options =>
         {
             options.AddDocumentTransformer((document, _, _) =>
             {
                 document.Info.Title = "Game Auth API";
                 document.Info.Version = "v1";
-            
+        
+                // 1. Define the Scheme
                 var securityScheme = new OpenApiSecurityScheme
                 {
                     Name = "Authorization",
+                    Description = "Enter JWT Bearer token **_only_**",
+                    In = ParameterLocation.Header,
                     Type = SecuritySchemeType.Http,
                     Scheme = "bearer",
                     BearerFormat = "JWT",
-                    In = ParameterLocation.Header,
-                    Description = "JWT Authorization header using the Bearer scheme."
+                    Reference = new OpenApiReference
+                    {
+                        Id = "Bearer",
+                        Type = ReferenceType.SecurityScheme
+                    }
                 };
 
                 document.Components ??= new OpenApiComponents();
                 document.Components.SecuritySchemes.Add("Bearer", securityScheme);
-                document.SecurityRequirements.Add(new OpenApiSecurityRequirement
-                {
-                    {
-                        new OpenApiSecurityScheme
-                        {
-                            Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
-                        },
-                        []
-                    }
-                });
 
+                // 2. Apply the Requirement globally or per-path
+                var securityRequirement = new OpenApiSecurityRequirement
+                {
+                    { securityScheme, Array.Empty<string>() }
+                };
+
+                foreach (var path in document.Paths.Values)
+                {
+                    foreach (var operation in path.Operations.Values)
+                    {
+                        // Only add if the operation requires auth (you can filter here if needed)
+                        // For now, we add it to all, allowing the user to click the lock icon.
+                        operation.Security.Add(securityRequirement);
+                    }
+                }
                 return Task.CompletedTask;
             });
         });
+
+        // MediatR & Behaviors (FIX: This wires up validation)
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssembly(typeof(ServiceExtensions).Assembly);
+            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+        });
+
+        services.AddValidatorsFromAssembly(typeof(ServiceExtensions).Assembly);
 
         return services;
     }

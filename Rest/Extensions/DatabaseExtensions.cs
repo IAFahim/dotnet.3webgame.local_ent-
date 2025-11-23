@@ -26,7 +26,7 @@ public static class DatabaseExtensions
             var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
             var configuration = services.GetRequiredService<IConfiguration>();
 
-            await context.Database.EnsureCreatedAsync();
+            await context.Database.MigrateAsync();
 
             var seedEnabled = configuration.GetValue("SeedData:Enabled", true);
 

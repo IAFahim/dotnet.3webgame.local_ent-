@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using Rest.Behaviors; // for ValidationFailure
+using Rest.Behaviors;
 
 namespace Rest.Middleware;
 
@@ -35,13 +35,10 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
     {
         return ex switch
         {
-            // Handle our FluentValidation pipeline exception
             Exceptions.ValidationException valEx => (
                 StatusCodes.Status400BadRequest,
                 "Validation Failure",
-                "One or more validation errors occurred",
-                // Group errors by property name for clean JSON output
-                valEx.Errors
+                "One or more validation errors occurred", valEx.Errors
                     .GroupBy(e => e.PropertyName)
                     .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray())
             ),
