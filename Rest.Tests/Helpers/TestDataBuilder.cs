@@ -24,10 +24,17 @@ public static class TestDataBuilder
     {
         var faker = GetUserFaker();
         var user = faker.Generate();
-        
-        if (username != null) user.UserName = username;
-        if (email != null) user.Email = email;
-        
+
+        if (username != null)
+        {
+            user.UserName = username;
+        }
+
+        if (email != null)
+        {
+            user.Email = email;
+        }
+
         return user;
     }
 

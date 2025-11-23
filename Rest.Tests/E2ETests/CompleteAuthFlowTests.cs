@@ -1,7 +1,7 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using FluentAssertions;
-using NUnit.Framework;
 using Rest.Features.Auth;
 using Rest.Features.Auth.Login;
 using Rest.Features.Auth.RefreshToken;
@@ -13,9 +13,6 @@ namespace Rest.Tests.E2ETests;
 [TestFixture]
 public class CompleteAuthFlowTests
 {
-    private TestWebApplicationFactory<Program> _factory = null!;
-    private HttpClient _client = null!;
-
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
@@ -30,6 +27,9 @@ public class CompleteAuthFlowTests
         _factory?.Dispose();
     }
 
+    private TestWebApplicationFactory<Program> _factory = null!;
+    private HttpClient _client = null!;
+
     [Test]
     public async Task CompleteUserJourney_RegisterLoginRefreshLogout_ShouldWorkEndToEnd()
     {
@@ -38,12 +38,7 @@ public class CompleteAuthFlowTests
         var password = "E2EPassword123!";
 
         // Step 1: Register
-        var registerRequest = new RegisterRequest
-        {
-            Username = username,
-            Email = email,
-            Password = password
-        };
+        var registerRequest = new RegisterRequest { Username = username, Email = email, Password = password };
 
         var registerResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", registerRequest);
         registerResponse.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -54,11 +49,7 @@ public class CompleteAuthFlowTests
         registerAuth.RefreshToken.Should().NotBeNullOrEmpty();
 
         // Step 2: Login
-        var loginRequest = new LoginRequest
-        {
-            Username = username,
-            Password = password
-        };
+        var loginRequest = new LoginRequest { Username = username, Password = password };
 
         var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
         loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -71,8 +62,7 @@ public class CompleteAuthFlowTests
         // We do this first because changing password revokes tokens!
         var refreshRequest = new RefreshTokenRequest
         {
-            AccessToken = loginAuth.AccessToken,
-            RefreshToken = loginAuth.RefreshToken
+            AccessToken = loginAuth.AccessToken, RefreshToken = loginAuth.RefreshToken
         };
 
         var refreshResponse = await _client.PostAsJsonAsync("/api/v1/auth/refresh", refreshRequest);
@@ -85,7 +75,7 @@ public class CompleteAuthFlowTests
 
         // Step 4: Use NEW token to access protected endpoint (Change Password)
         _client.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", refreshAuth.AccessToken);
+            new AuthenticationHeaderValue("Bearer", refreshAuth.AccessToken);
 
         var changePasswordRequest = new
         {
@@ -94,7 +84,8 @@ public class CompleteAuthFlowTests
             ConfirmNewPassword = "NewE2EPassword123!"
         };
 
-        var changePasswordResponse = await _client.PostAsJsonAsync("/api/v1/auth/change-password", changePasswordRequest);
+        var changePasswordResponse =
+            await _client.PostAsJsonAsync("/api/v1/auth/change-password", changePasswordRequest);
         changePasswordResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // Step 5: Logout (Using the token we just used, though it might be revoked now due to pass change logic.
@@ -111,8 +102,7 @@ public class CompleteAuthFlowTests
         // because password change revokes everything.
         var reRefreshRequest = new RefreshTokenRequest
         {
-            AccessToken = refreshAuth.AccessToken,
-            RefreshToken = refreshAuth.RefreshToken
+            AccessToken = refreshAuth.AccessToken, RefreshToken = refreshAuth.RefreshToken
         };
 
         var reRefreshResponse = await _client.PostAsJsonAsync("/api/v1/auth/refresh", reRefreshRequest);
@@ -131,13 +121,9 @@ public class CompleteAuthFlowTests
         await RegisterUser(username, email, correctPassword);
 
         // Act - Try to login with wrong password 6 times
-        for (int i = 0; i < 6; i++)
+        for (var i = 0; i < 6; i++)
         {
-            var loginRequest = new LoginRequest
-            {
-                Username = username,
-                Password = "WrongPassword123!"
-            };
+            var loginRequest = new LoginRequest { Username = username, Password = "WrongPassword123!" };
 
             var response = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
 
@@ -150,8 +136,7 @@ public class CompleteAuthFlowTests
         // Assert - Account should be locked
         var finalLoginRequest = new LoginRequest
         {
-            Username = username,
-            Password = correctPassword // Even with correct password
+            Username = username, Password = correctPassword // Even with correct password
         };
 
         var finalResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", finalLoginRequest);
@@ -163,12 +148,7 @@ public class CompleteAuthFlowTests
 
     private async Task RegisterUser(string username, string email, string password)
     {
-        var request = new RegisterRequest
-        {
-            Username = username,
-            Email = email,
-            Password = password
-        };
+        var request = new RegisterRequest { Username = username, Email = email, Password = password };
 
         await _client.PostAsJsonAsync("/api/v1/auth/register", request);
     }

@@ -1,8 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using FluentAssertions;
-using Microsoft.Extensions.Options;
-using NUnit.Framework;
 using Rest.Models;
 using Rest.Options;
 using Rest.Services;
@@ -12,10 +9,6 @@ namespace Rest.Tests.UnitTests;
 [TestFixture]
 public class TokenServiceTests
 {
-    private TokenService _tokenService = null!;
-    private JwtSettings _jwtSettings = null!;
-    private TimeProvider _timeProvider = null!;
-
     [SetUp]
     public void Setup()
     {
@@ -32,15 +25,17 @@ public class TokenServiceTests
         _tokenService = new TokenService(options, _timeProvider);
     }
 
+    private TokenService _tokenService = null!;
+    private JwtSettings _jwtSettings = null!;
+    private TimeProvider _timeProvider = null!;
+
     [Test]
     public void GenerateJwtToken_ShouldReturnValidToken()
     {
         // Arrange
         var user = new ApplicationUser
         {
-            Id = Guid.NewGuid().ToString(),
-            UserName = "testuser",
-            Email = "test@example.com"
+            Id = Guid.NewGuid().ToString(), UserName = "testuser", Email = "test@example.com"
         };
 
         // Act
@@ -65,9 +60,7 @@ public class TokenServiceTests
         // Arrange
         var user = new ApplicationUser
         {
-            Id = Guid.NewGuid().ToString(),
-            UserName = "testuser",
-            Email = "test@example.com"
+            Id = Guid.NewGuid().ToString(), UserName = "testuser", Email = "test@example.com"
         };
 
         var beforeGeneration = _timeProvider.GetUtcNow().UtcDateTime;
@@ -129,10 +122,7 @@ public class TokenServiceTests
         // Arrange
         var refreshToken = new RefreshToken
         {
-            Token = "valid-token",
-            Expires = DateTime.UtcNow.AddDays(1),
-            Created = DateTime.UtcNow,
-            Revoked = null
+            Token = "valid-token", Expires = DateTime.UtcNow.AddDays(1), Created = DateTime.UtcNow, Revoked = null
         };
 
         // Assert

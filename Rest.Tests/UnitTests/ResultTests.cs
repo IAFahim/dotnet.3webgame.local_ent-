@@ -1,5 +1,4 @@
 using FluentAssertions;
-using NUnit.Framework;
 using Rest.Common;
 
 namespace Rest.Tests.UnitTests;

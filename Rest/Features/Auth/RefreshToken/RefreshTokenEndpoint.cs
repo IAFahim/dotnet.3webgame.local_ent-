@@ -1,48 +1,58 @@
 using System.IdentityModel.Tokens.Jwt;
-using MediatR;
+using FastEndpoints;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Rest.Common;
 using Rest.Data;
 using Rest.Models;
 using Rest.Services;
 
 namespace Rest.Features.Auth.RefreshToken;
 
-public sealed class RefreshTokenCommandHandler(
+public class RefreshTokenEndpoint(
     UserManager<ApplicationUser> userManager,
     ApplicationDbContext dbContext,
     ITokenService tokenService,
-    ILogger<RefreshTokenCommandHandler> logger)
-    : IRequestHandler<RefreshTokenCommand, Result<AuthResponse>>
+    ILogger<RefreshTokenEndpoint> logger)
+    : Endpoint<RefreshTokenRequest, AuthResponse>
 {
-    public async Task<Result<AuthResponse>> Handle(RefreshTokenCommand request, CancellationToken cancellationToken)
+    public override void Configure()
     {
-        var principal = tokenService.GetPrincipalFromExpiredToken(request.AccessToken);
+        Post("/api/v1/auth/refresh");
+        AllowAnonymous();
+        Summary(s =>
+        {
+            s.Summary = "Refresh an expired access token";
+            s.Description = "Exchange an expired access token and valid refresh token for new tokens";
+            s.Response<AuthResponse>(200, "New tokens generated successfully");
+            s.Response(401, "Invalid or expired tokens");
+        });
+    }
+
+    public override async Task HandleAsync(RefreshTokenRequest req, CancellationToken ct)
+    {
+        var principal = tokenService.GetPrincipalFromExpiredToken(req.AccessToken);
         if (principal is null)
         {
-            return Result.Failure<AuthResponse>(new Error("Auth.InvalidToken", "Invalid access token"));
+            ThrowError("Invalid access token", 401);
         }
 
-        // Because we cleared the map, the ID is in 'sub'
         var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         var user = await userManager.Users
             .Include(u => u.RefreshTokens)
-            .SingleOrDefaultAsync(u => u.Id == userId, cancellationToken);
+            .SingleOrDefaultAsync(u => u.Id == userId, ct);
 
         if (user is null)
         {
-            return Result.Failure<AuthResponse>(new Error("Auth.UserNotFound", "User not found"));
+            ThrowError("User not found", 401);
         }
 
-        var storedToken = user.RefreshTokens.FirstOrDefault(x => x.Token == request.RefreshToken);
+        var storedToken = user.RefreshTokens.FirstOrDefault(x => x.Token == req.RefreshToken);
 
         if (storedToken is null)
         {
-            return Result.Failure<AuthResponse>(new Error("Auth.InvalidToken", "Invalid refresh token"));
+            ThrowError("Invalid refresh token", 401);
         }
 
-        // Reuse Detection logic
         if (storedToken.Revoked != null)
         {
             logger.LogCritical("Reuse of revoked token detected for user {User}. Revoking all sessions.", user.Id);
@@ -50,17 +60,17 @@ public sealed class RefreshTokenCommandHandler(
             {
                 token.Revoked = DateTime.UtcNow;
             }
+
             dbContext.Entry(user).State = EntityState.Modified;
-            await dbContext.SaveChangesAsync(cancellationToken);
-            return Result.Failure<AuthResponse>(new Error("Auth.SecurityAlert", "Security alert. Log in again."));
+            await dbContext.SaveChangesAsync(ct);
+            ThrowError("Security alert. Log in again.", 401);
         }
 
         if (!storedToken.IsActive)
         {
-            return Result.Failure<AuthResponse>(new Error("Auth.ExpiredToken", "Refresh token expired"));
+            ThrowError("Refresh token expired", 401);
         }
 
-        // Rotation
         var newRefreshToken = tokenService.GenerateRefreshToken();
         storedToken.Revoked = DateTime.UtcNow;
         storedToken.ReplacedByToken = newRefreshToken.Token;
@@ -70,13 +80,14 @@ public sealed class RefreshTokenCommandHandler(
         var newAccessToken = tokenService.GenerateJwtToken(user);
 
         dbContext.Entry(user).State = EntityState.Modified;
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(ct);
 
-        return new AuthResponse(
+        await SendAsync(new AuthResponse(
             newAccessToken,
             newRefreshToken.Token,
             newRefreshToken.Expires,
             user.UserName!,
-            user.Email!);
+            user.Email!
+        ), cancellation: ct);
     }
 }

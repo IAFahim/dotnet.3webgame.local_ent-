@@ -1,7 +1,7 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
-using Microsoft.Extensions.Options;
-using NUnit.Framework;
 using Rest.Models;
 using Rest.Options;
 using Rest.Services;
@@ -12,8 +12,8 @@ namespace Rest.Tests.PerformanceTests;
 [SimpleJob(warmupCount: 3, iterationCount: 5)]
 public class TokenGenerationBenchmarks
 {
-    private TokenService _tokenService = null!;
     private ApplicationUser _testUser = null!;
+    private TokenService _tokenService = null!;
 
     [GlobalSetup]
     public void Setup()
@@ -31,23 +31,15 @@ public class TokenGenerationBenchmarks
 
         _testUser = new ApplicationUser
         {
-            Id = Guid.NewGuid().ToString(),
-            UserName = "benchmarkuser",
-            Email = "benchmark@example.com"
+            Id = Guid.NewGuid().ToString(), UserName = "benchmarkuser", Email = "benchmark@example.com"
         };
     }
 
     [Benchmark]
-    public string GenerateJwtToken()
-    {
-        return _tokenService.GenerateJwtToken(_testUser);
-    }
+    public string GenerateJwtToken() => _tokenService.GenerateJwtToken(_testUser);
 
     [Benchmark]
-    public RefreshToken GenerateRefreshToken()
-    {
-        return _tokenService.GenerateRefreshToken();
-    }
+    public RefreshToken GenerateRefreshToken() => _tokenService.GenerateRefreshToken();
 
     [Benchmark]
     public void GenerateBothTokens()
@@ -65,7 +57,7 @@ public class TokenGenerationPerformanceTests
     public void RunBenchmarks()
     {
         var summary = BenchmarkRunner.Run<TokenGenerationBenchmarks>();
-        Assert.Pass($"Benchmarks completed. Check output for results.");
+        Assert.Pass("Benchmarks completed. Check output for results.");
     }
 
     [Test]
@@ -85,15 +77,13 @@ public class TokenGenerationPerformanceTests
 
         var user = new ApplicationUser
         {
-            Id = Guid.NewGuid().ToString(),
-            UserName = "perftest",
-            Email = "perf@example.com"
+            Id = Guid.NewGuid().ToString(), UserName = "perftest", Email = "perf@example.com"
         };
 
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var stopwatch = Stopwatch.StartNew();
 
         // Act
-        for (int i = 0; i < 100; i++)
+        for (var i = 0; i < 100; i++)
         {
             tokenService.GenerateJwtToken(user);
         }
@@ -102,7 +92,7 @@ public class TokenGenerationPerformanceTests
 
         // Assert
         var averageTime = stopwatch.ElapsedMilliseconds / 100.0;
-        Assert.That(averageTime, Is.LessThan(10), 
+        Assert.That(averageTime, Is.LessThan(10),
             $"Average token generation time was {averageTime}ms, expected less than 10ms");
     }
 
@@ -123,12 +113,10 @@ public class TokenGenerationPerformanceTests
 
         var user = new ApplicationUser
         {
-            Id = Guid.NewGuid().ToString(),
-            UserName = "concurrenttest",
-            Email = "concurrent@example.com"
+            Id = Guid.NewGuid().ToString(), UserName = "concurrenttest", Email = "concurrent@example.com"
         };
 
-        var tokens = new System.Collections.Concurrent.ConcurrentBag<string>();
+        var tokens = new ConcurrentBag<string>();
 
         // Act
         Parallel.For(0, 100, _ =>
@@ -139,7 +127,7 @@ public class TokenGenerationPerformanceTests
 
         // Assert
         Assert.That(tokens.Count, Is.EqualTo(100));
-        Assert.That(tokens.Distinct().Count(), Is.EqualTo(100), 
+        Assert.That(tokens.Distinct().Count(), Is.EqualTo(100),
             "All tokens should be unique");
     }
 }

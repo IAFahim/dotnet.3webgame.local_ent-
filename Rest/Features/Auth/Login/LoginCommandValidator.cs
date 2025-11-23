@@ -1,10 +1,11 @@
+using FastEndpoints;
 using FluentValidation;
 
 namespace Rest.Features.Auth.Login;
 
-public class LoginCommandValidator : AbstractValidator<LoginCommand>
+public class LoginRequestValidator : Validator<LoginRequest>
 {
-    public LoginCommandValidator()
+    public LoginRequestValidator()
     {
         RuleFor(x => x.Username).NotEmpty().WithMessage("Username is required.");
         RuleFor(x => x.Password).NotEmpty().WithMessage("Password is required.");

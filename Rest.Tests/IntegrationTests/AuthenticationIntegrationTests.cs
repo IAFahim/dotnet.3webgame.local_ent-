@@ -1,7 +1,7 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using FluentAssertions;
-using NUnit.Framework;
 using Rest.Features.Auth;
 using Rest.Features.Auth.Login;
 using Rest.Features.Auth.Register;
@@ -12,14 +12,8 @@ namespace Rest.Tests.IntegrationTests;
 [TestFixture]
 public class AuthenticationIntegrationTests
 {
-    private TestWebApplicationFactory<Program> _factory = null!;
-    private HttpClient _client = null!;
-
     [OneTimeSetUp]
-    public void OneTimeSetUp()
-    {
-        _factory = new TestWebApplicationFactory<Program>();
-    }
+    public void OneTimeSetUp() => _factory = new TestWebApplicationFactory<Program>();
 
     [SetUp]
     public void SetUp()
@@ -29,16 +23,13 @@ public class AuthenticationIntegrationTests
     }
 
     [TearDown]
-    public void TearDown()
-    {
-        _client?.Dispose();
-    }
+    public void TearDown() => _client?.Dispose();
 
     [OneTimeTearDown]
-    public void OneTimeTearDown()
-    {
-        _factory?.Dispose();
-    }
+    public void OneTimeTearDown() => _factory?.Dispose();
+
+    private TestWebApplicationFactory<Program> _factory = null!;
+    private HttpClient _client = null!;
 
     [Test]
     public async Task Register_WithValidData_ShouldReturnSuccess()
@@ -62,12 +53,7 @@ public class AuthenticationIntegrationTests
     public async Task Register_WithInvalidEmail_ShouldReturnBadRequest()
     {
         // Arrange
-        var request = new RegisterRequest
-        {
-            Username = "testuser",
-            Email = "invalid-email",
-            Password = "Password123!"
-        };
+        var request = new RegisterRequest { Username = "testuser", Email = "invalid-email", Password = "Password123!" };
 
         // Act
         var response = await _client.PostAsJsonAsync("/api/v1/auth/register", request);
@@ -104,11 +90,7 @@ public class AuthenticationIntegrationTests
 
         await RegisterUser(username, email, password);
 
-        var loginRequest = new LoginRequest
-        {
-            Username = username,
-            Password = password
-        };
+        var loginRequest = new LoginRequest { Username = username, Password = password };
 
         // Act
         var response = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
@@ -125,15 +107,12 @@ public class AuthenticationIntegrationTests
     [Test]
     public async Task Login_WithInvalidCredentials_ShouldReturnUnauthorized()
     {
-        var loginRequest = new LoginRequest
-        {
-            Username = "nonexistent",
-            Password = "WrongPassword123!"
-        };
+        var loginRequest = new LoginRequest { Username = "nonexistent", Password = "WrongPassword123!" };
 
         var response = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
+
     [Test]
     public async Task ChangePassword_WithValidToken_ShouldReturnSuccess()
     {
@@ -146,13 +125,11 @@ public class AuthenticationIntegrationTests
         var token = await RegisterAndGetToken(username, email, oldPassword);
 
         _client.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            new AuthenticationHeaderValue("Bearer", token);
 
         var changePasswordRequest = new
         {
-            CurrentPassword = oldPassword,
-            NewPassword = newPassword,
-            ConfirmNewPassword = newPassword
+            CurrentPassword = oldPassword, NewPassword = newPassword, ConfirmNewPassword = newPassword
         };
 
         // Act
@@ -181,7 +158,7 @@ public class AuthenticationIntegrationTests
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
-    
+
 
     public void Dispose()
     {

@@ -1,10 +1,12 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using FluentAssertions;
 using Microsoft.IdentityModel.Tokens;
+using Rest.Features.Auth;
 using Rest.Features.Auth.Register;
 using Rest.Tests.Helpers;
 
@@ -13,9 +15,6 @@ namespace Rest.Tests.SecurityTests;
 [TestFixture]
 public class JwtSecurityTests
 {
-    private TestWebApplicationFactory<Program> _factory = null!;
-    private HttpClient _client = null!;
-
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
@@ -30,6 +29,9 @@ public class JwtSecurityTests
         _client?.Dispose();
         _factory?.Dispose();
     }
+
+    private TestWebApplicationFactory<Program> _factory = null!;
+    private HttpClient _client = null!;
 
     [Test]
     public async Task GeneratedToken_ShouldUseHS256Algorithm()
@@ -49,7 +51,7 @@ public class JwtSecurityTests
         var tamperedToken = validToken![..^1] + "X";
 
         _client.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", tamperedToken);
+            new AuthenticationHeaderValue("Bearer", tamperedToken);
 
         var response = await _client.PostAsync("/api/v1/auth/logout", null);
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -77,7 +79,7 @@ public class JwtSecurityTests
         var expiredToken = tokenHandler.WriteToken(token);
 
         _client.DefaultRequestHeaders.Authorization =
-            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", expiredToken);
+            new AuthenticationHeaderValue("Bearer", expiredToken);
 
         var response = await _client.PostAsync("/api/v1/auth/logout", null);
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -121,7 +123,7 @@ public class JwtSecurityTests
         // This line was throwing because response was 500
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var authResponse = await response.Content.ReadFromJsonAsync<Rest.Features.Auth.AuthResponse>();
+        var authResponse = await response.Content.ReadFromJsonAsync<AuthResponse>();
         return authResponse!.AccessToken;
     }
 }

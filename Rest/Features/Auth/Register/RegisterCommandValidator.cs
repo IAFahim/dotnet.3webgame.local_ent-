@@ -1,10 +1,11 @@
+using FastEndpoints;
 using FluentValidation;
 
 namespace Rest.Features.Auth.Register;
 
-public class RegisterCommandValidator : AbstractValidator<RegisterCommand>
+public class RegisterRequestValidator : Validator<RegisterRequest>
 {
-    public RegisterCommandValidator()
+    public RegisterRequestValidator()
     {
         RuleFor(x => x.Username).NotEmpty().Length(3, 50);
         RuleFor(x => x.Email).NotEmpty().EmailAddress();

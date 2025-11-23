@@ -1,5 +1,4 @@
 using FluentAssertions;
-using NUnit.Framework;
 using Rest.Tests.Helpers;
 
 namespace Rest.Tests.SecurityTests;
@@ -7,9 +6,6 @@ namespace Rest.Tests.SecurityTests;
 [TestFixture]
 public class SecurityHeadersTests
 {
-    private TestWebApplicationFactory<Program> _factory = null!;
-    private HttpClient _client = null!;
-
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
@@ -23,6 +19,9 @@ public class SecurityHeadersTests
         _client?.Dispose();
         _factory?.Dispose();
     }
+
+    private TestWebApplicationFactory<Program> _factory = null!;
+    private HttpClient _client = null!;
 
     [Test]
     public async Task Response_ShouldIncludeSecurityHeaders()

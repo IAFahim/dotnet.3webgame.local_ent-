@@ -19,23 +19,25 @@ public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgra
         // Disable Rate Limiting for Tests
         builder.ConfigureAppConfiguration((context, conf) =>
         {
-            conf.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                {"RateLimiting:Enabled", "false"}
-            });
+            conf.AddInMemoryCollection(new Dictionary<string, string?> { { "RateLimiting:Enabled", "false" } });
         });
 
         builder.ConfigureServices(services =>
         {
             // 1. Remove existing DbContext
-            var dbContextDescriptor = services.SingleOrDefault(
-                d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
-            if (dbContextDescriptor != null) services.Remove(dbContextDescriptor);
+            var dbContextDescriptor =
+                services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
+            if (dbContextDescriptor != null)
+            {
+                services.Remove(dbContextDescriptor);
+            }
 
             // 2. Remove existing DbConnection configuration
-            var dbConnectionDescriptor = services.SingleOrDefault(
-                d => d.ServiceType == typeof(DbConnection));
-            if (dbConnectionDescriptor != null) services.Remove(dbConnectionDescriptor);
+            var dbConnectionDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbConnection));
+            if (dbConnectionDescriptor != null)
+            {
+                services.Remove(dbConnectionDescriptor);
+            }
 
             // 3. Create Shared Connection with Busy Timeout
             // Use a unique name to ensure isolation between test classes
@@ -57,7 +59,7 @@ public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgra
             {
                 var interceptor = sp.GetRequiredService<AuditableEntityInterceptor>();
                 options.UseSqlite(_connection)
-                       .AddInterceptors(interceptor);
+                    .AddInterceptors(interceptor);
             });
         });
 

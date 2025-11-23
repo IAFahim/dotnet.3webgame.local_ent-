@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
-using NUnit.Framework;
 using Rest.Features.Auth.Register;
 using Rest.Tests.Helpers;
 
@@ -11,9 +10,6 @@ namespace Rest.Tests.PerformanceTests;
 [TestFixture]
 public class ApiLoadTests
 {
-    private TestWebApplicationFactory<Program> _factory = null!;
-    private HttpClient _client = null!;
-
     [OneTimeSetUp]
     public void OneTimeSetUp()
     {
@@ -27,6 +23,9 @@ public class ApiLoadTests
         _client?.Dispose();
         _factory?.Dispose();
     }
+
+    private TestWebApplicationFactory<Program> _factory = null!;
+    private HttpClient _client = null!;
 
     [Test]
     [Category("Load")]
@@ -85,15 +84,19 @@ public class ApiLoadTests
         var successCount = 0;
         var stopwatch = Stopwatch.StartNew();
 
-        for (int i = 0; i < numberOfRequests; i++)
+        for (var i = 0; i < numberOfRequests; i++)
         {
             var response = await _client.GetAsync("/health");
-            if (response.StatusCode == HttpStatusCode.OK) successCount++;
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                successCount++;
+            }
         }
 
         stopwatch.Stop();
 
-        TestContext.Out.WriteLine($"Requests per second: {numberOfRequests / (stopwatch.ElapsedMilliseconds / 1000.0):F2}");
+        TestContext.Out.WriteLine(
+            $"Requests per second: {numberOfRequests / (stopwatch.ElapsedMilliseconds / 1000.0):F2}");
         successCount.Should().Be(numberOfRequests);
     }
 
@@ -131,12 +134,7 @@ public class ApiLoadTests
 
     private Task<HttpResponseMessage> RegisterUser(string username, string email)
     {
-        var request = new RegisterRequest
-        {
-            Username = username,
-            Email = email,
-            Password = "LoadTest123!"
-        };
+        var request = new RegisterRequest { Username = username, Email = email, Password = "LoadTest123!" };
 
         return _client.PostAsJsonAsync("/api/v1/auth/register", request);
     }

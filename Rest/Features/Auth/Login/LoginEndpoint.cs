@@ -1,47 +1,59 @@
-using MediatR;
+using FastEndpoints;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Rest.Common;
 using Rest.Data;
 using Rest.Models;
 using Rest.Services;
 
 namespace Rest.Features.Auth.Login;
 
-public sealed class LoginCommandHandler(
+public class LoginEndpoint(
     UserManager<ApplicationUser> userManager,
     SignInManager<ApplicationUser> signInManager,
     ApplicationDbContext dbContext,
     ITokenService tokenService,
     TimeProvider timeProvider,
-    ILogger<LoginCommandHandler> logger)
-    : IRequestHandler<LoginCommand, Result<AuthResponse>>
+    ILogger<LoginEndpoint> logger)
+    : Endpoint<LoginRequest, AuthResponse>
 {
-    public async Task<Result<AuthResponse>> Handle(LoginCommand request, CancellationToken cancellationToken)
+    public override void Configure()
     {
-        var user = await userManager.FindByNameAsync(request.Username);
+        Post("/api/v1/auth/login");
+        AllowAnonymous();
+        Summary(s =>
+        {
+            s.Summary = "Login with username and password";
+            s.Description = "Authenticate user and receive access and refresh tokens";
+            s.Response<AuthResponse>(200, "Login successful with tokens");
+            s.Response(401, "Invalid credentials or account locked");
+        });
+    }
+
+    public override async Task HandleAsync(LoginRequest req, CancellationToken ct)
+    {
+        var user = await userManager.FindByNameAsync(req.Username);
         if (user is null)
         {
-            return InvalidCreds();
+            logger.LogWarning("Invalid login attempt");
+            ThrowError("Invalid credentials", 401);
         }
 
-        var result = await signInManager.CheckPasswordSignInAsync(user, request.Password, true);
+        var result = await signInManager.CheckPasswordSignInAsync(user, req.Password, true);
         if (!result.Succeeded)
         {
             if (result.IsLockedOut)
             {
-                logger.LogWarning("User {Username} is locked out", request.Username);
-                return Result.Failure<AuthResponse>(new Error("Auth.LockedOut",
-                    "Account is locked out. Please try again later."));
+                logger.LogWarning("User {Username} is locked out", req.Username);
+                ThrowError("Account is locked out. Please try again later.", 401);
             }
 
-            return InvalidCreds();
+            logger.LogWarning("Invalid login attempt");
+            ThrowError("Invalid credentials", 401);
         }
 
-        // Reload user with RefreshTokens to ensure we have the collection
         user = await userManager.Users
             .Include(u => u.RefreshTokens)
-            .FirstOrDefaultAsync(u => u.Id == user.Id, cancellationToken) ?? user;
+            .FirstOrDefaultAsync(u => u.Id == user.Id, ct) ?? user;
 
         var accessToken = tokenService.GenerateJwtToken(user);
         var refreshToken = tokenService.GenerateRefreshToken();
@@ -51,7 +63,7 @@ public sealed class LoginCommandHandler(
         var expiredTokens = user.RefreshTokens
             .Where(t => !t.IsActive && t.Created.AddDays(2) <= timeProvider.GetUtcNow().DateTime)
             .ToList();
-        
+
         foreach (var token in expiredTokens)
         {
             user.RefreshTokens.Remove(token);
@@ -59,23 +71,17 @@ public sealed class LoginCommandHandler(
 
         user.LastLoginAt = timeProvider.GetUtcNow().DateTime;
 
-        // Explicitly save changes to the DbContext to ensure owned entities are persisted
         dbContext.Entry(user).State = EntityState.Modified;
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await dbContext.SaveChangesAsync(ct);
 
         logger.LogInformation("User {Username} logged in successfully", user.UserName);
 
-        return new AuthResponse(
+        await SendAsync(new AuthResponse(
             accessToken,
             refreshToken.Token,
             refreshToken.Expires,
             user.UserName!,
-            user.Email!);
-    }
-
-    private Result<AuthResponse> InvalidCreds()
-    {
-        logger.LogWarning("Invalid login attempt");
-        return Result.Failure<AuthResponse>(new Error("Auth.InvalidCredentials", "Invalid credentials"));
+            user.Email!
+        ), cancellation: ct);
     }
 }

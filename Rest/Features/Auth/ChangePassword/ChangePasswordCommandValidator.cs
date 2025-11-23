@@ -1,10 +1,11 @@
+using FastEndpoints;
 using FluentValidation;
 
 namespace Rest.Features.Auth.ChangePassword;
 
-public class ChangePasswordCommandValidator : AbstractValidator<ChangePasswordCommand>
+public class ChangePasswordRequestValidator : Validator<ChangePasswordRequest>
 {
-    public ChangePasswordCommandValidator()
+    public ChangePasswordRequestValidator()
     {
         RuleFor(x => x.CurrentPassword).NotEmpty();
 
