@@ -21,8 +21,16 @@ public sealed class LoginCommandHandler(
         var user = await userManager.FindByNameAsync(request.Username);
         if (user is null) return InvalidCreds();
 
-        var result = await signInManager.CheckPasswordSignInAsync(user, request.Password, false);
-        if (!result.Succeeded) return InvalidCreds();
+        var result = await signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
+        if (!result.Succeeded) 
+        {
+            if (result.IsLockedOut)
+            {
+                logger.LogWarning("User {Username} is locked out", request.Username);
+                return Result.Failure<AuthResponse>(new Error("Auth.LockedOut", "Account is locked out. Please try again later."));
+            }
+            return InvalidCreds();
+        }
 
         var accessToken = tokenService.GenerateJwtToken(user);
         var refreshToken = tokenService.GenerateRefreshToken();
@@ -36,6 +44,8 @@ public sealed class LoginCommandHandler(
         user.LastLoginAt = timeProvider.GetUtcNow().DateTime;
         
         await userManager.UpdateAsync(user);
+
+        logger.LogInformation("User {Username} logged in successfully", user.UserName);
 
         return new AuthResponse(
             accessToken, 

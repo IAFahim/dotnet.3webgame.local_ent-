@@ -8,18 +8,16 @@ using Rest.Middleware;
 using Scalar.AspNetCore;
 using Serilog;
 
-// 1. Setup Serilog first
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
     .CreateBootstrapLogger();
 
 try
 {
-    Log.Information("Starting Web Application...");
+    Log.Information("Starting Game Auth API...");
     
     Env.TraversePath().Load(); 
     
-    // CRITICAL: Stop .NET from renaming "sub" to "http://.../nameidentifier"
     JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear(); 
     
     var builder = WebApplication.CreateBuilder(args);
@@ -32,14 +30,35 @@ try
         .Enrich.FromLogContext()
         .WriteTo.Console());
 
-    builder.Services.AddControllers();
+    builder.Services.AddControllers(options =>
+    {
+        options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = false;
+    });
+    
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-    builder.Services.AddProblemDetails();
+    builder.Services.AddProblemDetails(options =>
+    {
+        options.CustomizeProblemDetails = ctx =>
+        {
+            ctx.ProblemDetails.Instance = $"{ctx.HttpContext.Request.Method} {ctx.HttpContext.Request.Path}";
+            ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier;
+            ctx.ProblemDetails.Extensions["requestId"] = ctx.HttpContext.Request.Headers["X-Request-ID"].FirstOrDefault() 
+                                                         ?? ctx.HttpContext.TraceIdentifier;
+        };
+    });
+    
     builder.Services.AddInfrastructure(builder.Configuration);
+
+    builder.Services.AddResponseCaching();
+    builder.Services.AddResponseCompression(options =>
+    {
+        options.EnableForHttps = true;
+    });
 
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        
         options.AddFixedWindowLimiter("fixed", policy =>
         {
             policy.PermitLimit = 100;
@@ -47,26 +66,59 @@ try
             policy.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
             policy.QueueLimit = 5;
         });
+        
+        options.AddPolicy("api", context =>
+        {
+            var username = context.User.Identity?.Name ?? "anonymous";
+            return RateLimitPartition.GetFixedWindowLimiter(username, _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 5
+            });
+        });
     });
 
-    builder.Services.AddHealthChecks().AddDbContextCheck<ApplicationDbContext>();
-    builder.Services.AddCors(o => o.AddPolicy("AllowAll", p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+    builder.Services.AddHealthChecks()
+        .AddDbContextCheck<ApplicationDbContext>();
+    
+    builder.Services.AddCors(options => 
+    {
+        options.AddPolicy("AllowAll", policy => 
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader());
+    });
 
     var app = builder.Build();
 
+    app.UseSecurityHeaders();
     app.UseExceptionHandler(); 
-    app.UseSerilogRequestLogging();
+    app.UseSerilogRequestLogging(options =>
+    {
+        options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
+        options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
+        {
+            diagnosticContext.Set("RequestHost", httpContext.Request.Host.Value ?? "unknown");
+            diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme ?? "unknown");
+            diagnosticContext.Set("RemoteIP", httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+            var userAgent = httpContext.Request.Headers.UserAgent.ToString();
+            diagnosticContext.Set("UserAgent", string.IsNullOrEmpty(userAgent) ? "unknown" : userAgent);
+        };
+    });
 
     if (app.Environment.IsDevelopment())
     {
+        app.UseDeveloperExceptionPage();
         app.MapOpenApi();
         app.MapScalarApiReference(options =>
         {
-            options.WithTitle("Game Auth API Docs")
+            options.WithTitle("Game Auth API")
                 .WithTheme(ScalarTheme.Kepler)
                 .WithLayout(ScalarLayout.Modern)
                 .WithDownloadButton(true)
-                .WithPreferredScheme("Bearer") // Prefills the auth scheme
+                .WithPreferredScheme("Bearer")
                 .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
         });
         
@@ -79,37 +131,42 @@ try
 
     app.UseHttpsRedirection();
     app.UseCors("AllowAll");
+    app.UseResponseCompression();
+    app.UseResponseCaching();
     app.UseRateLimiter();
     
-    // Authentication MUST be before Authorization
     app.UseAuthentication();
     app.UseAuthorization();
 
-    app.MapControllers(); 
-    app.MapHealthChecks("/health");
+    app.MapControllers()
+        .RequireRateLimiting("api"); 
+    
+    app.MapHealthChecks("/health")
+        .AllowAnonymous();
 
-    // 2. Register the URL logging callback
     app.Lifetime.ApplicationStarted.Register(() =>
     {
-        var addresses = app.Urls;
-        if (!addresses.Any()) addresses = new[] { "http://localhost:5083" }; // Fallback for dev default
+        var addresses = app.Urls.Any() ? app.Urls : new[] { "http://localhost:5000" };
         
         foreach (var address in addresses)
         {
-            Log.Information("----------------------------------------------------------");
-            Log.Information("🚀 Scalar API Docs: {Address}/scalar/v1", address);
-            Log.Information("📄 Raw OpenAPI Spec: {Address}/openapi/v1.json", address);
-            Log.Information("----------------------------------------------------------");
+            Log.Information("─────────────────────────────────────────────────────────");
+            Log.Information("🚀 Game Auth API: {Address}", address);
+            Log.Information("📚 API Documentation: {Address}/scalar/v1", address);
+            Log.Information("📄 OpenAPI Spec: {Address}/openapi/v1.json", address);
+            Log.Information("❤️  Health Check: {Address}/health", address);
+            Log.Information("─────────────────────────────────────────────────────────");
         }
     });
 
-    app.Run();
+    await app.RunAsync();
 }
 catch (Exception ex) when (ex is not HostAbortedException)
 {
     Log.Fatal(ex, "Application terminated unexpectedly");
+    throw;
 }
 finally
 {
-    Log.CloseAndFlush();
+    await Log.CloseAndFlushAsync();
 }

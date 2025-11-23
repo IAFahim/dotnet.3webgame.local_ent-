@@ -27,16 +27,29 @@ public static class ServiceExtensions
         // JWT Configuration
         var jwtSection = config.GetSection(JwtSettings.SectionName);
         services.Configure<JwtSettings>(jwtSection);
-        var jwtSettings = jwtSection.Get<JwtSettings>();
+        services.AddOptions<JwtSettings>()
+            .Bind(jwtSection)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        
+        var jwtSettings = jwtSection.Get<JwtSettings>() 
+            ?? throw new InvalidOperationException("JWT settings not configured.");
 
         // Database
-        var connectionString = config.GetConnectionString("DefaultConnection");
+        var connectionString = config.GetConnectionString("DefaultConnection") 
+            ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+        
         services.AddDbContext<ApplicationDbContext>((sp, options) =>
         {
             var interceptor = sp.GetRequiredService<AuditableEntityInterceptor>();
             options.UseSqlite(connectionString)
                    .AddInterceptors(interceptor)
-                   .UseSnakeCaseNamingConvention();
+                   .UseSnakeCaseNamingConvention()
+                   .EnableSensitiveDataLogging(false)
+                   .EnableDetailedErrors(false)
+                   .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking)
+                   .ConfigureWarnings(warnings => 
+                       warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
         });
 
         // Identity
@@ -44,7 +57,18 @@ public static class ServiceExtensions
         {
             options.Password.RequireDigit = true;
             options.Password.RequiredLength = 8;
+            options.Password.RequireNonAlphanumeric = true;
+            options.Password.RequireUppercase = true;
+            options.Password.RequireLowercase = true;
+            options.Password.RequiredUniqueChars = 4;
+            
             options.User.RequireUniqueEmail = true;
+            
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+            options.Lockout.MaxFailedAccessAttempts = 5;
+            options.Lockout.AllowedForNewUsers = true;
+            
+            options.SignIn.RequireConfirmedEmail = false;
         })
         .AddEntityFrameworkStores<ApplicationDbContext>()
         .AddDefaultTokenProviders();

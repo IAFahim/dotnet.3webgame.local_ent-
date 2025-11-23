@@ -16,18 +16,26 @@ public sealed class RegisterCommandHandler(
     {
         logger.LogInformation("Registering user: {Username}", request.Username);
 
+        var existingUser = await userManager.FindByEmailAsync(request.Email);
+        if (existingUser is not null)
+        {
+            return Result.Failure<AuthResponse>(new Error("Auth.DuplicateEmail", "Email is already registered."));
+        }
+
         var user = new ApplicationUser 
         { 
             UserName = request.Username, 
-            Email = request.Email 
+            Email = request.Email,
+            EmailConfirmed = false
         };
 
         var result = await userManager.CreateAsync(user, request.Password);
 
         if (!result.Succeeded)
         {
-            var error = string.Join(", ", result.Errors.Select(e => e.Description));
-            return Result.Failure<AuthResponse>(new Error("Auth.RegisterFailed", error));
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            logger.LogWarning("Failed to register user {Username}: {Errors}", request.Username, errors);
+            return Result.Failure<AuthResponse>(new Error("Auth.RegisterFailed", errors));
         }
 
         var accessToken = tokenService.GenerateJwtToken(user);
@@ -35,6 +43,8 @@ public sealed class RegisterCommandHandler(
 
         user.RefreshTokens.Add(refreshToken);
         await userManager.UpdateAsync(user);
+
+        logger.LogInformation("User {Username} registered successfully", user.UserName);
 
         return new AuthResponse(
             accessToken, 

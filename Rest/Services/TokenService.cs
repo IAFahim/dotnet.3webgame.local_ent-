@@ -23,15 +23,16 @@ public sealed class TokenService(IOptions<JwtSettings> jwtOptions, TimeProvider 
             new(JwtRegisteredClaimNames.Sub, user.Id),
             new(JwtRegisteredClaimNames.UniqueName, user.UserName!),
             new(JwtRegisteredClaimNames.Email, user.Email!),
-            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new(JwtRegisteredClaimNames.Iat, timeProvider.GetUtcNow().ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64)
         };
 
-        // FIX: Extended expiration to 7 days for easier testing
         var token = new JwtSecurityToken(
-            _settings.Issuer,
-            _settings.Audience,
-            claims,
-            expires: timeProvider.GetUtcNow().AddDays(7).DateTime, 
+            issuer: _settings.Issuer,
+            audience: _settings.Audience,
+            claims: claims,
+            notBefore: timeProvider.GetUtcNow().DateTime,
+            expires: timeProvider.GetUtcNow().AddHours(_settings.ExpirationHours).DateTime,
             signingCredentials: credentials
         );
 
@@ -40,15 +41,15 @@ public sealed class TokenService(IOptions<JwtSettings> jwtOptions, TimeProvider 
 
     public RefreshToken GenerateRefreshToken()
     {
-        var randomNumber = new byte[32];
+        var randomNumber = new byte[64];
         using var rng = RandomNumberGenerator.Create();
         rng.GetBytes(randomNumber);
         
         return new RefreshToken
         {
             Token = Convert.ToBase64String(randomNumber),
-            Expires = DateTime.UtcNow.AddDays(30), // Refresh token lasts 30 days
-            Created = DateTime.UtcNow
+            Expires = timeProvider.GetUtcNow().AddDays(30).DateTime,
+            Created = timeProvider.GetUtcNow().DateTime
         };
     }
 

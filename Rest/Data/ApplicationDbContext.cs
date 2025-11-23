@@ -11,13 +11,36 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     {
         base.OnModelCreating(builder);
 
-        builder.Entity<ApplicationUser>()
-            .OwnsMany(u => u.RefreshTokens, a =>
+        builder.Entity<ApplicationUser>(entity =>
+        {
+            entity.HasIndex(u => u.Email)
+                .IsUnique()
+                .HasDatabaseName("idx_applicationuser_email");
+            
+            entity.HasIndex(u => u.UserName)
+                .IsUnique()
+                .HasDatabaseName("idx_applicationuser_username");
+            
+            entity.HasIndex(u => u.LastLoginAt)
+                .HasDatabaseName("idx_applicationuser_lastlogin");
+
+            entity.OwnsMany(u => u.RefreshTokens, rt =>
             {
-                a.WithOwner().HasForeignKey("UserId");
-                a.ToTable("refresh_tokens");
-                a.HasKey(t => t.Id); // Explicitly define Key
-                a.Property(t => t.Id).ValueGeneratedOnAdd();
+                rt.WithOwner().HasForeignKey("UserId");
+                rt.ToTable("refresh_tokens");
+                rt.HasKey(t => t.Id);
+                rt.Property(t => t.Id).ValueGeneratedOnAdd();
+                
+                rt.HasIndex(t => t.Token)
+                    .IsUnique()
+                    .HasDatabaseName("idx_refreshtoken_token");
+                
+                rt.HasIndex(t => t.Expires)
+                    .HasDatabaseName("idx_refreshtoken_expires");
+                
+                rt.HasIndex(t => t.Revoked)
+                    .HasDatabaseName("idx_refreshtoken_revoked");
             });
+        });
     }
 }
