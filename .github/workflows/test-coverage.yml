@@ -38,9 +38,15 @@ jobs:
           --configuration Release \
           --no-restore \
           --collect:"XPlat Code Coverage" \
-          --results-directory ./coverage \
+          --results-directory ./TestResults \
           --logger "console;verbosity=normal" \
           -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+    
+    - name: 📁 List coverage files
+      if: always()
+      run: |
+        echo "Looking for coverage files..."
+        find . -name "coverage.*.xml" -type f 2>/dev/null || echo "No coverage files found"
     
     - name: 📊 Install ReportGenerator
       run: dotnet tool install -g dotnet-reportgenerator-globaltool
@@ -48,10 +54,11 @@ jobs:
     - name: 📈 Generate Coverage Report
       run: |
         reportgenerator \
-          -reports:"coverage/**/coverage.opencover.xml" \
+          -reports:"TestResults/**/coverage.opencover.xml" \
           -targetdir:"coverage-report" \
           -reporttypes:"Html;JsonSummary;Badges;Cobertura" \
           -verbosity:Info
+      continue-on-error: true
     
     - name: 📤 Upload Coverage Report
       uses: actions/upload-artifact@v4
@@ -61,18 +68,22 @@ jobs:
         retention-days: 30
     
     - name: 📊 Coverage Summary
+      if: success() || failure()
       run: |
         echo "## Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         if [ -f coverage-report/Summary.json ]; then
-          cat coverage-report/Summary.json
+          echo "Coverage report generated successfully" >> $GITHUB_STEP_SUMMARY
+          cat coverage-report/Summary.json >> $GITHUB_STEP_SUMMARY || echo "Could not display JSON summary"
+        else
+          echo "⚠️ Coverage report not generated" >> $GITHUB_STEP_SUMMARY
         fi
     
     - name: 📈 Upload to Codecov
       uses: codecov/codecov-action@v4
       if: success() || failure()
       with:
-        files: ./coverage/**/coverage.opencover.xml
+        files: ./TestResults/**/coverage.opencover.xml
         flags: unittests,integrationtests
         name: coverage-report
         fail_ci_if_error: false

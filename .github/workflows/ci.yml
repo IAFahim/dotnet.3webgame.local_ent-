@@ -92,12 +92,13 @@ jobs:
     
     - name: 📈 Code Coverage Report
       uses: codecov/codecov-action@v4
-      if: always()
+      if: success() || failure()
       with:
-        files: '**/coverage.opencover.xml'
+        files: 'TestResults/**/coverage.opencover.xml'
         flags: unittests
         name: unit-tests
         fail_ci_if_error: false
+      continue-on-error: true
 
   # Integration Tests
   integration-tests:
@@ -139,12 +140,13 @@ jobs:
     
     - name: 📈 Code Coverage Report
       uses: codecov/codecov-action@v4
-      if: always()
+      if: success() || failure()
       with:
-        files: '**/coverage.opencover.xml'
+        files: 'TestResults/**/coverage.opencover.xml'
         flags: integrationtests
         name: integration-tests
         fail_ci_if_error: false
+      continue-on-error: true
 
   # Security Tests
   security-tests:
@@ -281,12 +283,13 @@ jobs:
     
     - name: 📈 Combined Code Coverage
       uses: codecov/codecov-action@v4
-      if: always()
+      if: success() || failure()
       with:
-        files: './TestResults/**/coverage.opencover.xml'
+        files: 'TestResults/**/coverage.opencover.xml'
         flags: alltests
         name: all-tests-coverage
         fail_ci_if_error: false
+      continue-on-error: true
     
     - name: 📤 Upload Test Results
       uses: actions/upload-artifact@v4

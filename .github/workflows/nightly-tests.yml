@@ -49,11 +49,12 @@ jobs:
     
     - name: 📈 Coverage Report
       uses: codecov/codecov-action@v4
-      if: always()
+      if: success() || failure()
       with:
-        files: '**/coverage.opencover.xml'
+        files: 'TestResults/**/coverage.opencover.xml'
         flags: nightlytests
         name: nightly-coverage
+      continue-on-error: true
 
   e2e-tests:
     name: End-to-End Tests

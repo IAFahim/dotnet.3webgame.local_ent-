@@ -112,11 +112,12 @@ jobs:
     
     - name: 📈 Coverage Comparison
       uses: codecov/codecov-action@v4
-      if: always()
+      if: success() || failure()
       with:
-        files: '**/coverage.opencover.xml'
+        files: 'TestResults/**/coverage.opencover.xml'
         flags: pr-tests
         name: pr-coverage
+      continue-on-error: true
 
   code-review-checks:
     name: Code Review Checks
