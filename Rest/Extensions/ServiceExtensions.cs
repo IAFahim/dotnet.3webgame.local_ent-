@@ -14,7 +14,7 @@ namespace Rest.Extensions;
 
 public static class ServiceExtensions
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config, IHostApplicationBuilder? hostBuilder = null)
     {
         // Services
         services.AddSingleton(TimeProvider.System);
@@ -32,22 +32,38 @@ public static class ServiceExtensions
         var jwtSettings = jwtSection.Get<JwtSettings>()
                           ?? throw new InvalidOperationException("JWT settings not configured.");
 
-        // Database
-        var connectionString = config.GetConnectionString("DefaultConnection")
-                               ?? throw new InvalidOperationException(
-                                   "Connection string 'DefaultConnection' not found.");
-
-        services.AddDbContext<ApplicationDbContext>((sp, options) =>
+        // Database - PostgreSQL with Aspire
+        if (hostBuilder != null)
         {
-            var interceptor = sp.GetRequiredService<AuditableEntityInterceptor>();
-            options.UseSqlite(connectionString)
-                .AddInterceptors(interceptor)
-                .UseSnakeCaseNamingConvention()
-                .EnableSensitiveDataLogging(false)
-                .EnableDetailedErrors(false)
-                .ConfigureWarnings(warnings =>
-                    warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
-        });
+            hostBuilder.AddNpgsqlDbContext<ApplicationDbContext>("DefaultConnection",
+                configureSettings: null,
+                configureDbContextOptions: options =>
+                {
+                    options.UseSnakeCaseNamingConvention()
+                        .EnableSensitiveDataLogging(false)
+                        .EnableDetailedErrors(false)
+                        .ConfigureWarnings(warnings =>
+                            warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
+                });
+        }
+        else
+        {
+            // Fallback for tests or non-Aspire scenarios  
+            var connectionString = config.GetConnectionString("DefaultConnection")
+                                   ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+            
+            services.AddDbContext<ApplicationDbContext>((sp, options) =>
+            {
+                var interceptor = sp.GetRequiredService<AuditableEntityInterceptor>();
+                options.UseNpgsql(connectionString)
+                    .AddInterceptors(interceptor)
+                    .UseSnakeCaseNamingConvention()
+                    .EnableSensitiveDataLogging(false)
+                    .EnableDetailedErrors(false)
+                    .ConfigureWarnings(warnings =>
+                        warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
+            });
+        }
 
         // Identity
         services.AddIdentity<ApplicationUser, IdentityRole>(options =>

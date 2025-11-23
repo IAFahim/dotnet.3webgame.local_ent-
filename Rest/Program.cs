@@ -17,6 +17,9 @@ try
     Env.TraversePath().Load();
     var builder = WebApplication.CreateBuilder(args);
     builder.Configuration.AddEnvironmentVariables();
+    
+    // Add Aspire service defaults (OpenTelemetry, health checks, service discovery)
+    builder.AddServiceDefaults();
 
     // 2. Configure Host (Logging)
     builder.Host.UseSerilog((context, services, configuration) => configuration
@@ -29,10 +32,13 @@ try
     //    - Infrastructure: Database, Identity, JWT (Your existing extension)
     //    - WebServices: FastEndpoints, Swagger, RateLimits (The new extension)
     builder.Services
-        .AddInfrastructure(builder.Configuration)
+        .AddInfrastructure(builder.Configuration, builder)
         .AddWebServices(builder.Configuration);
 
     var app = builder.Build();
+
+    // Map Aspire default endpoints (health checks, etc.)
+    app.MapDefaultEndpoints();
 
     // 4. Configure Pipeline (The "How")
     await app.ConfigurePipelineAsync();
