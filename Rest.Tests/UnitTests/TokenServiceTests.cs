@@ -48,10 +48,10 @@ public class TokenServiceTests
 
         // Assert
         token.Should().NotBeNullOrEmpty();
-        
+
         var tokenHandler = new JwtSecurityTokenHandler();
         var jwtToken = tokenHandler.ReadJwtToken(token);
-        
+
         jwtToken.Issuer.Should().Be(_jwtSettings.Issuer);
         jwtToken.Audiences.Should().Contain(_jwtSettings.Audience);
         jwtToken.Claims.Should().Contain(c => c.Type == JwtRegisteredClaimNames.Sub && c.Value == user.Id);
@@ -70,7 +70,7 @@ public class TokenServiceTests
             Email = "test@example.com"
         };
 
-        var beforeGeneration = _timeProvider.GetUtcNow();
+        var beforeGeneration = _timeProvider.GetUtcNow().UtcDateTime;
 
         // Act
         var token = _tokenService.GenerateJwtToken(user);
@@ -78,23 +78,23 @@ public class TokenServiceTests
         // Assert
         var tokenHandler = new JwtSecurityTokenHandler();
         var jwtToken = tokenHandler.ReadJwtToken(token);
-        
+
         // Get expiration from exp claim (Unix timestamp)
         var expClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == "exp")?.Value;
         expClaim.Should().NotBeNullOrEmpty();
-        
+
         var expUnixTime = long.Parse(expClaim!);
         var expirationTime = DateTimeOffset.FromUnixTimeSeconds(expUnixTime);
-        
+
         var expectedExpiration = beforeGeneration.AddHours(_jwtSettings.ExpirationHours);
-        
+
         // Token should expire approximately at the expected time (within 10 seconds tolerance)
         var timeDifference = (expirationTime - expectedExpiration).TotalSeconds;
-        timeDifference.Should().BeInRange(-10, 10, 
+        timeDifference.Should().BeInRange(-10, 10,
             "token expiration should be within 10 seconds of the expected time");
-        
+
         // Token should not be expired yet
-        expirationTime.Should().BeAfter(_timeProvider.GetUtcNow());
+        expirationTime.Should().BeAfter(_timeProvider.GetUtcNow().UtcDateTime);
     }
 
     [Test]

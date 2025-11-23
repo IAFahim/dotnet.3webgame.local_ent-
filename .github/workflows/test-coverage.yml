@@ -1,129 +1,57 @@
-name: Test Coverage Report
+name: 📊 Test Coverage
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
-  schedule:
-    # Run every day at 2 AM UTC
-    - cron: '0 2 * * *'
+    branches: [ main ]
   workflow_dispatch:
-
-env:
-  DOTNET_VERSION: '9.0.x'
 
 jobs:
   coverage:
-    name: Generate Coverage Report
+    name: Generate Coverage
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+
     steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    
-    - name: 🔧 Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-    
-    - name: 📦 Restore dependencies
-      run: dotnet restore
-    
-    - name: 🧪 Run tests with coverage
-      run: |
-        dotnet test \
-          --configuration Release \
-          --no-restore \
-          --collect:"XPlat Code Coverage" \
-          --results-directory ./TestResults \
-          --logger "console;verbosity=normal" \
-          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
-    
-    - name: 📁 List coverage files
-      if: always()
-      run: |
-        echo "Looking for coverage files..."
-        find . -name "coverage.*.xml" -type f 2>/dev/null || echo "No coverage files found"
-    
-    - name: 📊 Install ReportGenerator
-      run: dotnet tool install -g dotnet-reportgenerator-globaltool
-    
-    - name: 📈 Generate Coverage Report
-      run: |
-        reportgenerator \
-          -reports:"TestResults/**/coverage.opencover.xml" \
-          -targetdir:"coverage-report" \
-          -reporttypes:"Html;JsonSummary;Badges;Cobertura" \
-          -verbosity:Info
-      continue-on-error: true
-    
-    - name: 📤 Upload Coverage Report
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-report
-        path: coverage-report/
-        retention-days: 30
-    
-    - name: 📊 Coverage Summary
-      if: success() || failure()
-      run: |
-        echo "## Code Coverage Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        if [ -f coverage-report/Summary.json ]; then
-          echo "Coverage report generated successfully" >> $GITHUB_STEP_SUMMARY
-          cat coverage-report/Summary.json >> $GITHUB_STEP_SUMMARY || echo "Could not display JSON summary"
-        else
-          echo "⚠️ Coverage report not generated" >> $GITHUB_STEP_SUMMARY
-        fi
-    
-    - name: 📈 Upload to Codecov
-      uses: codecov/codecov-action@v4
-      if: success() || failure()
-      with:
-        files: ./TestResults/**/coverage.opencover.xml
-        flags: unittests,integrationtests
-        name: coverage-report
-        fail_ci_if_error: false
-        verbose: true
-      continue-on-error: true
-    
-    - name: 🎯 Coverage Badge
-      if: github.ref == 'refs/heads/main'
-      run: |
-        echo "Coverage badge can be generated from coverage-report/badge_combined.svg"
-    
-    - name: 📊 Comment Coverage on PR
-      if: github.event_name == 'pull_request'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const fs = require('fs');
-          
-          // Read summary if available
-          let coverageSummary = 'Coverage report generated. Check artifacts for details.';
-          
-          try {
-            const summary = JSON.parse(fs.readFileSync('coverage-report/Summary.json', 'utf8'));
-            const lineCoverage = summary.coverage.toFixed(2);
-            const branchCoverage = summary.branchcoverage.toFixed(2);
-            
-            coverageSummary = `### 📊 Code Coverage Report
-            
-            - **Line Coverage:** ${lineCoverage}%
-            - **Branch Coverage:** ${branchCoverage}%
-            
-            📈 [View detailed report in artifacts]
-            `;
-          } catch (error) {
-            console.log('Could not read coverage summary:', error.message);
-          }
-          
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: coverageSummary
-          });
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: 🛠️ Install ReportGenerator
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
+
+      - name: 🧪 Run Tests & Collect Coverage
+        run: |
+          dotnet test Rest.Tests/Rest.Tests.csproj \
+            --configuration Release \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./TestResults \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+
+      - name: 📄 Generate HTML Report
+        run: |
+          reportgenerator \
+            -reports:"TestResults/**/coverage.opencover.xml" \
+            -targetdir:"coverage-report" \
+            -reporttypes:"Html;JsonSummary;Badges"
+
+      - name: 📤 Upload Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-report/
+          retention-days: 30
+
+      - name: 📈 Upload to Codecov
+        uses: codecov/codecov-action@v4
+        continue-on-error: true
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./TestResults
+          files: "**/*.opencover.xml"
+          fail_ci_if_error: false

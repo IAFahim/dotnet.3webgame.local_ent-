@@ -16,7 +16,7 @@ public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgra
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        // 1. Disable Rate Limiting for tests to prevent 429 errors
+        // Disable Rate Limiting for Tests
         builder.ConfigureAppConfiguration((context, conf) =>
         {
             conf.AddInMemoryCollection(new Dictionary<string, string?>
@@ -27,22 +27,30 @@ public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgra
 
         builder.ConfigureServices(services =>
         {
-            // 2. Remove the app's existing DbContext registration
+            // 1. Remove existing DbContext
             var dbContextDescriptor = services.SingleOrDefault(
                 d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
             if (dbContextDescriptor != null) services.Remove(dbContextDescriptor);
 
+            // 2. Remove existing DbConnection configuration
             var dbConnectionDescriptor = services.SingleOrDefault(
                 d => d.ServiceType == typeof(DbConnection));
             if (dbConnectionDescriptor != null) services.Remove(dbConnectionDescriptor);
 
-            // 3. Create a single shared SQLite connection for this factory
-            _connection = new SqliteConnection("DataSource=:memory:");
+            // 3. Create Shared Connection with Busy Timeout (Fixes Load Tests)
+            // Mode=Memory;Cache=Shared allows sharing the in-memory DB across connections if needed
+            var connectionString = "DataSource=:memory:;Mode=Memory;Cache=Shared";
+            _connection = new SqliteConnection(connectionString);
             _connection.Open();
 
-            services.AddSingleton<DbConnection>(_connection);
+            // CRITICAL FIX: Set busy timeout to 10 seconds to handle concurrent writes
+            using (var command = _connection.CreateCommand())
+            {
+                command.CommandText = "PRAGMA busy_timeout = 10000;";
+                command.ExecuteNonQuery();
+            }
 
-            // 4. Register DbContext using the shared connection AND the Interceptor
+            // 4. Add DbContext with the shared connection
             services.AddDbContext<ApplicationDbContext>((sp, options) =>
             {
                 var interceptor = sp.GetRequiredService<AuditableEntityInterceptor>();
@@ -54,11 +62,11 @@ public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgra
         builder.UseEnvironment("Testing");
     }
 
-    // Helper to ensure DB is created before tests run
     public HttpClient CreateClientWithDbSetup()
     {
         var client = CreateClient();
 
+        // Ensure database tables are created
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         db.Database.EnsureCreated();
@@ -69,6 +77,12 @@ public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgra
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        _connection?.Dispose();
+
+        // Dispose connection after base to ensure no lingering requests use it
+        if (disposing)
+        {
+            _connection?.Close();
+            _connection?.Dispose();
+        }
     }
 }
