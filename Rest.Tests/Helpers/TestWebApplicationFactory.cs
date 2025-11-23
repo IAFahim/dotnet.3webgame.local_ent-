@@ -12,7 +12,7 @@ namespace Rest.Tests.Helpers;
 
 public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgram> where TProgram : class
 {
-    private DbConnection _connection;
+    private SqliteConnection? _connection;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -37,16 +37,18 @@ public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgra
                 d => d.ServiceType == typeof(DbConnection));
             if (dbConnectionDescriptor != null) services.Remove(dbConnectionDescriptor);
 
-            // 3. Create Shared Connection with Busy Timeout (Fixes Load Tests)
-            // Mode=Memory;Cache=Shared allows sharing the in-memory DB across connections if needed
-            var connectionString = "DataSource=:memory:;Mode=Memory;Cache=Shared";
+            // 3. Create Shared Connection with Busy Timeout
+            // Use a unique name to ensure isolation between test classes
+            var connectionString = $"DataSource=file:memdb_{Guid.NewGuid()}?mode=memory&cache=shared";
             _connection = new SqliteConnection(connectionString);
             _connection.Open();
 
-            // CRITICAL FIX: Set busy timeout to 10 seconds to handle concurrent writes
+            // CRITICAL: Set busy timeout to allow concurrent writes (fixes load test failures)
             using (var command = _connection.CreateCommand())
             {
-                command.CommandText = "PRAGMA busy_timeout = 10000;";
+                command.CommandText = "PRAGMA busy_timeout = 10000;"; // 10 seconds
+                command.ExecuteNonQuery();
+                command.CommandText = "PRAGMA journal_mode = WAL;"; // Write-Ahead Logging for concurrency
                 command.ExecuteNonQuery();
             }
 
@@ -76,13 +78,17 @@ public class TestWebApplicationFactory<TProgram> : WebApplicationFactory<TProgra
 
     protected override void Dispose(bool disposing)
     {
-        base.Dispose(disposing);
-
-        // Dispose connection after base to ensure no lingering requests use it
+        // FIX: Dispose connection BEFORE base.Dispose to avoid NRE
         if (disposing)
         {
-            _connection?.Close();
-            _connection?.Dispose();
+            if (_connection != null)
+            {
+                _connection.Close();
+                _connection.Dispose();
+                _connection = null;
+            }
         }
+
+        base.Dispose(disposing);
     }
 }
