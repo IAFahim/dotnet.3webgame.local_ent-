@@ -1,16 +1,13 @@
-using System;
-using System.ComponentModel;
 using System.Text;
-using System.Threading.Tasks;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
+using Rest.Behaviors;
 using Rest.Data;
+using Rest.Data.Interceptors;
 using Rest.Models;
 using Rest.Options;
 using Rest.Services;
@@ -21,9 +18,20 @@ public static class ServiceExtensions
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
     {
-        services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseInMemoryDatabase("GameAuthDb"));
+        // 1. Core Utilities
+        services.AddSingleton(TimeProvider.System);
 
+        // 2. Database & Interceptors
+        services.AddScoped<AuditableEntityInterceptor>();
+        
+        services.AddDbContext<ApplicationDbContext>((sp, options) =>
+        {
+            var interceptor = sp.GetRequiredService<AuditableEntityInterceptor>();
+            options.UseInMemoryDatabase("GameAuthDb")
+                   .AddInterceptors(interceptor);
+        });
+
+        // 3. Identity
         services.AddIdentity<ApplicationUser, IdentityRole>(options =>
             {
                 options.Password.RequireDigit = true;
@@ -33,6 +41,7 @@ public static class ServiceExtensions
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddDefaultTokenProviders();
 
+        // 4. JWT Configuration
         services.AddOptions<JwtSettings>()
             .BindConfiguration(JwtSettings.SectionName)
             .ValidateDataAnnotations()
@@ -60,8 +69,18 @@ public static class ServiceExtensions
             };
         });
 
+        // 5. Application Services
         services.AddScoped<ITokenService, TokenService>();
-        services.AddScoped<IAuthService, AuthService>();
+
+        // 6. MediatR & Pipeline Behaviors
+        services.AddMediatR(cfg =>
+        {
+            cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);
+            cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+        });
+
+        // 7. Validators
+        services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 
         return services;
     }
@@ -98,18 +117,6 @@ public static class ServiceExtensions
                     }
                 });
 
-                return Task.CompletedTask;
-            });
-
-            options.AddSchemaTransformer((schema, context, _) =>
-            {
-                if (context.JsonPropertyInfo?.AttributeProvider?
-                        .GetCustomAttributes(typeof(DefaultValueAttribute), false)
-                        .FirstOrDefault() is DefaultValueAttribute defaultValue)
-                {
-                    schema.Example = new OpenApiString(defaultValue.Value?.ToString());
-                }
-            
                 return Task.CompletedTask;
             });
         });

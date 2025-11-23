@@ -20,7 +20,6 @@ public sealed class AuditableEntityInterceptor(TimeProvider timeProvider) : Save
             {
                 entry.Entity.CreatedAt = timeProvider.GetUtcNow().DateTime;
             }
-            // Can handle UpdatedAt here too
         }
 
         return base.SavingChangesAsync(eventData, result, cancellationToken);

@@ -2,22 +2,31 @@
 # 🍎 MAC / RIDER / VS CODE API SUITE
 # ==========================================
 
+# Configuration Variables
 @hostname = localhost
 @port = 5083
 @host = http://{{hostname}}:{{port}}
 @contentType = application/json
 
-# 🎲 Generate random user for this session
+# 🎲 Generate Random User for Session
 @username = player_{{$randomInt}}
 @password = Password123!
 
-### 🟢 1. HEALTH CHECK
+# ==========================================
+# 🏥 HEALTH & STATUS
+# ==========================================
+
+### Health Check
 GET {{host}}/health
 
 ###
 
-### 📝 2. REGISTER
-POST {{host}}/api/auth/register
+# ==========================================
+# 🔐 AUTHENTICATION
+# ==========================================
+
+### Register New User
+POST {{host}}/api/v1/auth/register
 Content-Type: {{contentType}}
 
 {
@@ -28,9 +37,9 @@ Content-Type: {{contentType}}
 
 ###
 
-### 🔑 3. LOGIN (Run this to save Token!)
+### Login (Saves Token Automatically)
 # @name loginRequest
-POST {{host}}/api/auth/login
+POST {{host}}/api/v1/auth/login
 Content-Type: {{contentType}}
 
 {
@@ -39,24 +48,15 @@ Content-Type: {{contentType}}
 }
 
 > {%
-    // 💾 THIS SCRIPT SAVES THE TOKEN AUTOMATICALLY
+    // 💾 Auto-save authentication token
     client.global.set("auth_token", response.body.token);
     client.log("Token saved: " + response.body.token);
 %}
 
 ###
 
-###
-
-### 👤 5. GET PROFILE
-GET {{host}}/api/auth/profile
-Authorization: Bearer {{auth_token}}
-Content-Type: {{contentType}}
-
-###
-
-### 🔐 6. CHANGE PASSWORD
-POST {{host}}/api/auth/change-password
+### Change Password
+POST {{host}}/api/v1/auth/change-password
 Authorization: Bearer {{auth_token}}
 Content-Type: {{contentType}}
 
@@ -68,8 +68,19 @@ Content-Type: {{contentType}}
 
 ###
 
-### 🛑 7. SECURITY CHECK: Weak Password
-POST {{host}}/api/auth/register
+### Logout
+POST {{host}}/api/v1/auth/logout
+Authorization: Bearer {{auth_token}}
+Content-Type: {{contentType}}
+
+###
+
+# ==========================================
+# 🛡️ SECURITY VALIDATION TESTS
+# ==========================================
+
+### Test: Weak Password (Should Fail Validation)
+POST {{host}}/api/v1/auth/register
 Content-Type: {{contentType}}
 
 {
@@ -80,6 +91,15 @@ Content-Type: {{contentType}}
 
 ###
 
-### ⛔ 8. SECURITY CHECK: Bad Token
-GET {{host}}/api/auth/coins
+### Test: Invalid Token (Should Return 401)
+POST {{host}}/api/v1/auth/change-password
 Authorization: Bearer invalid_token_example
+Content-Type: {{contentType}}
+
+{
+  "currentPassword": "123",
+  "newPassword": "123",
+  "confirmNewPassword": "123"
+}
+
+###

@@ -5,73 +5,117 @@ using Rest.Data;
 using Rest.Extensions;
 using Rest.Middleware;
 using Scalar.AspNetCore;
+using Serilog;
 
-// 1. Load Env
-Env.Load();
+// 1. Setup Serilog Bootstrap Logger
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
 
-var builder = WebApplication.CreateBuilder(args);
-
-// 2. Add Environment Variables
-builder.Configuration.AddEnvironmentVariables();
-
-// Add Services
-builder.Services.AddControllers();
-builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-builder.Services.AddProblemDetails();
-builder.Services.AddInfrastructure(builder.Configuration);
-
-// --- FIX 1: RATE LIMITER SERVICE DEFINITION ---
-builder.Services.AddRateLimiter(options =>
+try
 {
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    
-    // This defines the policy named "fixed"
-    options.AddFixedWindowLimiter("fixed", policy =>
+    Log.Information("Starting Web Application...");
+
+    Env.Load();
+
+    var builder = WebApplication.CreateBuilder(args);
+
+    // 2. Host Configuration: Use Serilog
+    builder.Host.UseSerilog((context, services, configuration) => configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .WriteTo.Console());
+
+    builder.Configuration.AddEnvironmentVariables();
+
+    // 3. Add Services
+    builder.Services.AddControllers();
+    builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+    builder.Services.AddProblemDetails();
+    builder.Services.AddInfrastructure(builder.Configuration);
+
+    builder.Services.AddRateLimiter(options =>
     {
-        policy.PermitLimit = 100;
-        policy.Window = TimeSpan.FromMinutes(1);
-        policy.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        policy.QueueLimit = 5;
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        options.AddFixedWindowLimiter("fixed", policy =>
+        {
+            policy.PermitLimit = 100;
+            policy.Window = TimeSpan.FromMinutes(1);
+            policy.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+            policy.QueueLimit = 5;
+        });
     });
-});
 
-builder.Services.AddHealthChecks().AddDbContextCheck<ApplicationDbContext>();
-builder.Services.AddCors(o => o.AddPolicy("AllowAll", p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
-builder.Services.AddOpenApiDocs();
+    builder.Services.AddHealthChecks().AddDbContextCheck<ApplicationDbContext>();
+    builder.Services.AddCors(o => o.AddPolicy("AllowAll", p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+    builder.Services.AddOpenApiDocs();
 
-var app = builder.Build();
+    var app = builder.Build();
 
-// Configure Pipeline
-app.UseExceptionHandler(); 
+    // 4. Configure Pipeline
+    app.UseExceptionHandler(); 
+    app.UseSerilogRequestLogging();
 
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-    app.MapScalarApiReference(options =>
+    if (app.Environment.IsDevelopment())
     {
-        options.WithTitle("Game Auth API")
-            .WithTheme(ScalarTheme.Mars)
-            .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+        app.MapOpenApi(); // Generates /openapi/v1.json
+        
+        // --- 🚀 ULTIMATE SCALAR CONFIGURATION ---
+        app.MapScalarApiReference(options =>
+        {
+            options
+                // 1. Visuals & Layout
+                .WithTitle("Game Auth API Docs")
+                .WithTheme(ScalarTheme.Kepler) // "Kepler" is a stunning high-contrast theme
+                .WithLayout(ScalarLayout.Modern) // Sidebar layout for better navigation
+                
+                // 2. Interactivity
+                .WithSearchHotKey("k") // Ctrl+K to search
+                .WithDownloadButton(true) // Button to download openapi.json
+                .WithDarkModeToggle(true) // Allow user to switch themes
+                
+                // 3. Authentication & Clients
+                .WithPreferredScheme("Bearer") // Pre-selects JWT Auth
+                .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient) // Default code snippet
+                ;
+        });
+        
+        await app.SeedDatabaseAsync();
+    }
+    else
+    {
+        app.UseHsts();
+    }
+
+    app.UseHttpsRedirection();
+    app.UseCors("AllowAll");
+    app.UseRateLimiter();
+    app.UseAuthentication();
+    app.UseAuthorization();
+
+    app.MapControllers(); 
+    app.MapHealthChecks("/health");
+
+    // --- 5. DYNAMIC URL LOGGING ---
+    // This fires ONLY after Kestrel has successfully bound to the port (e.g., 5083)
+    app.Lifetime.ApplicationStarted.Register(() =>
+    {
+        var addresses = app.Urls;
+        foreach (var address in addresses)
+        {
+            Log.Information("🚀 Scalar API Docs: {Address}/scalar/v1", address);
+            Log.Information("📄 Raw OpenAPI Spec: {Address}/openapi/v1.json", address);
+        }
     });
-    
-    await app.SeedDatabaseAsync();
+
+    app.Run();
 }
-else
+catch (Exception ex)
 {
-    app.UseHsts();
+    Log.Fatal(ex, "Application terminated unexpectedly");
 }
-
-app.UseHttpsRedirection();
-
-// --- FIX 2: MIDDLEWARE ORDER IS CRITICAL ---
-app.UseCors("AllowAll");   // 1. CORS first
-app.UseRateLimiter();      // 2. Rate Limiter second
-app.UseAuthentication();   // 3. Auth third
-app.UseAuthorization();
-
-// --- FIX 3: REMOVE .RequireRateLimiting("fixed") HERE ---
-// We will add it to the Controller instead.
-app.MapControllers(); 
-app.MapHealthChecks("/health");
-
-app.Run();
+finally
+{
+    Log.CloseAndFlush();
+}

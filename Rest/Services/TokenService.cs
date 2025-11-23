@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -10,7 +8,7 @@ using Rest.Options;
 
 namespace Rest.Services;
 
-public sealed class TokenService(IOptions<JwtSettings> jwtOptions) : ITokenService
+public sealed class TokenService(IOptions<JwtSettings> jwtOptions, TimeProvider timeProvider) : ITokenService
 {
     private readonly JwtSettings _settings = jwtOptions.Value;
 
@@ -31,7 +29,7 @@ public sealed class TokenService(IOptions<JwtSettings> jwtOptions) : ITokenServi
             _settings.Issuer,
             _settings.Audience,
             claims,
-            expires: DateTime.UtcNow.AddHours(_settings.ExpirationHours),
+            expires: timeProvider.GetUtcNow().AddHours(_settings.ExpirationHours).DateTime,
             signingCredentials: credentials
         );
 
