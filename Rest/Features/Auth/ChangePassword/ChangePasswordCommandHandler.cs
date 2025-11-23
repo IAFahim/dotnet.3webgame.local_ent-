@@ -13,8 +13,12 @@ public sealed class ChangePasswordCommandHandler(
 {
     public async Task<Result> Handle(ChangePasswordCommand request, CancellationToken cancellationToken)
     {
-        // 1. Find user
-        var user = await userManager.FindByIdAsync(request.UserId);
+        // 1. Load user with tracking enabled and include refresh tokens
+        var user = await userManager.Users
+            .Include(u => u.RefreshTokens)
+            .AsTracking()
+            .FirstOrDefaultAsync(u => u.Id == request.UserId, cancellationToken);
+            
         if (user is null)
         {
             return Result.Failure(new Error("Auth.UserNotFound", "User not found"));
@@ -25,26 +29,19 @@ public sealed class ChangePasswordCommandHandler(
 
         if (!result.Succeeded)
         {
-            var errorMsg = string.Join(", ", result.Errors.Select(e => e.Description));
-            return Result.Failure(new Error("Auth.ChangePasswordFailed", errorMsg));
+            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+            logger.LogWarning("Failed to change password for user {Username}: {Errors}", user.UserName, errors);
+            return Result.Failure(new Error("Auth.ChangePasswordFailed", errors));
         }
 
-        // 3. Critical: Revoke Refresh Tokens on password change
-        // We need to load them first if they aren't loaded (FindByIdAsync doesn't include Owned Types by default usually, strictly speaking)
-        // However, Owned Types are often auto-included. To be safe:
-        var userWithTokens = await userManager.Users
-            .Include(u => u.RefreshTokens)
-            .FirstOrDefaultAsync(u => u.Id == request.UserId, cancellationToken);
-
-        if (userWithTokens != null)
+        // 3. Revoke all active refresh tokens on password change
+        foreach (var token in user.RefreshTokens.Where(t => t.IsActive))
         {
-            foreach (var token in userWithTokens.RefreshTokens.Where(t => t.IsActive))
-            {
-                token.Revoked = DateTime.UtcNow;
-            }
-
-            await userManager.UpdateAsync(userWithTokens);
+            token.Revoked = DateTime.UtcNow;
         }
+        
+        // Update user with revoked tokens (user is already tracked)
+        await userManager.UpdateAsync(user);
 
         logger.LogInformation("Password changed successfully for user {Username}", user.UserName);
         return Result.Success();

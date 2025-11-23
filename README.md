@@ -129,12 +129,23 @@ The application uses SQLite with the following features:
 - **Audit fields** (CreatedAt, LastLoginAt)
 - **Migrations** for schema management
 
-### Run Migrations
+### Reset Database (Recommended)
+
+Use the provided script to reset the database and apply migrations:
 
 ```bash
-dotnet ef migrations add <MigrationName> --project Rest
-dotnet ef database update --project Rest
+./reset-database.sh
 ```
+
+### Manual Migrations
+
+```bash
+cd Rest
+dotnet ef migrations add <MigrationName>
+dotnet ef database update
+```
+
+For more details, see [DATABASE_MANAGEMENT.md](DATABASE_MANAGEMENT.md)
 
 ## 🧪 Testing
 
