@@ -20,7 +20,7 @@ public class CompleteAuthFlowTests
     public void OneTimeSetUp()
     {
         _factory = new TestWebApplicationFactory<Program>();
-        _client = _factory.CreateClient();
+        _client = _factory.CreateClientWithDbSetup();
     }
 
     [OneTimeTearDown]
@@ -47,7 +47,7 @@ public class CompleteAuthFlowTests
 
         var registerResponse = await _client.PostAsJsonAsync("/api/v1/auth/register", registerRequest);
         registerResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        
+
         var registerAuth = await registerResponse.Content.ReadFromJsonAsync<AuthResponse>();
         registerAuth.Should().NotBeNull();
         registerAuth!.AccessToken.Should().NotBeNullOrEmpty();
@@ -62,7 +62,7 @@ public class CompleteAuthFlowTests
 
         var loginResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
         loginResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        
+
         var loginAuth = await loginResponse.Content.ReadFromJsonAsync<AuthResponse>();
         loginAuth.Should().NotBeNull();
         loginAuth!.AccessToken.Should().NotBeNullOrEmpty();
@@ -90,7 +90,7 @@ public class CompleteAuthFlowTests
 
         var refreshResponse = await _client.PostAsJsonAsync("/api/v1/auth/refresh", refreshRequest);
         refreshResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        
+
         var refreshAuth = await refreshResponse.Content.ReadFromJsonAsync<AuthResponse>();
         refreshAuth.Should().NotBeNull();
         refreshAuth!.AccessToken.Should().NotBeNullOrEmpty();
@@ -135,7 +135,7 @@ public class CompleteAuthFlowTests
             };
 
             var response = await _client.PostAsJsonAsync("/api/v1/auth/login", loginRequest);
-            
+
             if (i < 5)
             {
                 response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -151,7 +151,7 @@ public class CompleteAuthFlowTests
 
         var finalResponse = await _client.PostAsJsonAsync("/api/v1/auth/login", finalLoginRequest);
         finalResponse.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        
+
         var content = await finalResponse.Content.ReadAsStringAsync();
         content.Should().Contain("locked", "account should be locked");
     }
