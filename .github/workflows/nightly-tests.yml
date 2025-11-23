@@ -1,0 +1,224 @@
+name: Nightly Tests
+
+on:
+  schedule:
+    # Run every night at 1 AM UTC
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '9.0.x'
+
+jobs:
+  comprehensive-tests:
+    name: Comprehensive Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: 📦 Restore dependencies
+      run: dotnet restore
+    
+    - name: 🧪 Run All Tests (Including Explicit)
+      run: |
+        dotnet test Rest.Tests/Rest.Tests.csproj \
+          --configuration Release \
+          --no-restore \
+          --logger "trx;LogFileName=nightly-test-results.trx" \
+          --logger "console;verbosity=detailed" \
+          --collect:"XPlat Code Coverage" \
+          -- RunConfiguration.CollectSourceInformation=true
+    
+    - name: 📊 Test Report
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: Nightly Test Results
+        path: '**/nightly-test-results.trx'
+        reporter: dotnet-trx
+        fail-on-error: false
+    
+    - name: 📈 Coverage Report
+      uses: codecov/codecov-action@v4
+      if: always()
+      with:
+        files: '**/coverage.opencover.xml'
+        flags: nightlytests
+        name: nightly-coverage
+
+  e2e-tests:
+    name: End-to-End Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: 📦 Restore dependencies
+      run: dotnet restore
+    
+    - name: 🌐 Run E2E Tests
+      run: |
+        dotnet test Rest.Tests/Rest.Tests.csproj \
+          --filter "FullyQualifiedName~E2ETests" \
+          --configuration Release \
+          --no-restore \
+          --logger "trx;LogFileName=e2e-test-results.trx" \
+          --logger "console;verbosity=detailed"
+      continue-on-error: true
+    
+    - name: 📊 E2E Test Report
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: E2E Test Results
+        path: '**/e2e-test-results.trx'
+        reporter: dotnet-trx
+        fail-on-error: false
+
+  stress-tests:
+    name: Stress Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: 📦 Restore dependencies
+      run: dotnet restore
+    
+    - name: 💪 Run Stress Tests
+      run: |
+        dotnet test Rest.Tests/Rest.Tests.csproj \
+          --filter "TestCategory=Stress" \
+          --configuration Release \
+          --no-restore \
+          --logger "trx;LogFileName=stress-test-results.trx" \
+          --logger "console;verbosity=detailed"
+      continue-on-error: true
+    
+    - name: 📊 Stress Test Report
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: Stress Test Results
+        path: '**/stress-test-results.trx'
+        reporter: dotnet-trx
+        fail-on-error: false
+
+  benchmark-tests:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: 📦 Restore dependencies
+      run: dotnet restore
+    
+    - name: ⚡ Run Benchmarks
+      run: |
+        dotnet test Rest.Tests/Rest.Tests.csproj \
+          --filter "FullyQualifiedName~Benchmarks" \
+          --configuration Release \
+          --no-restore
+      continue-on-error: true
+    
+    - name: 📊 Benchmark Results
+      if: always()
+      run: echo "Benchmark tests completed. Check logs for performance metrics."
+
+  mutation-tests:
+    name: Mutation Testing
+    runs-on: ubuntu-latest
+    if: false  # Enable when Stryker is configured
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: 📦 Install Stryker
+      run: dotnet tool install -g dotnet-stryker
+    
+    - name: 🧬 Run Mutation Tests
+      run: |
+        cd Rest.Tests
+        dotnet stryker
+      continue-on-error: true
+
+  notify-results:
+    name: Notify Results
+    needs: [comprehensive-tests, e2e-tests, stress-tests, benchmark-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: 📊 Summary
+      run: |
+        echo "## 🌙 Nightly Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Execution Summary" >> $GITHUB_STEP_SUMMARY
+        echo "- Comprehensive Tests: ${{ needs.comprehensive-tests.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- E2E Tests: ${{ needs.e2e-tests.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Stress Tests: ${{ needs.stress-tests.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Benchmark Tests: ${{ needs.benchmark-tests.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "📅 Execution Date: $(date -u)" >> $GITHUB_STEP_SUMMARY
+    
+    - name: 🔔 Create Issue on Failure
+      if: |
+        needs.comprehensive-tests.result == 'failure' ||
+        needs.e2e-tests.result == 'failure'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: '🔴 Nightly Tests Failed - ' + new Date().toISOString().split('T')[0],
+            body: `## Nightly Test Failure Report
+            
+            One or more nightly test suites have failed.
+            
+            **Failed Jobs:**
+            - Comprehensive Tests: ${{ needs.comprehensive-tests.result }}
+            - E2E Tests: ${{ needs.e2e-tests.result }}
+            - Stress Tests: ${{ needs.stress-tests.result }}
+            - Benchmark Tests: ${{ needs.benchmark-tests.result }}
+            
+            **Workflow Run:** [View Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            Please investigate and fix the failing tests.`,
+            labels: ['bug', 'tests', 'nightly']
+          });

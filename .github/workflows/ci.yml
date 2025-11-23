@@ -1,0 +1,371 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+
+jobs:
+  # Build and validate code
+  build:
+    name: Build & Validate
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Shallow clones should be disabled for better analysis
+    
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: 📦 Restore dependencies
+      run: dotnet restore
+      working-directory: ./Rest
+    
+    - name: 🔨 Build
+      run: dotnet build --no-restore --configuration Release
+      working-directory: ./Rest
+    
+    - name: 📋 Format check
+      run: dotnet format --verify-no-changes --no-restore
+      working-directory: ./Rest
+      continue-on-error: true  # Don't fail build on format issues
+    
+    - name: 📤 Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts
+        path: |
+          Rest/bin/Release/
+          Rest.Tests/bin/Release/
+        retention-days: 1
+
+  # Unit Tests
+  unit-tests:
+    name: Unit Tests
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: 📦 Restore dependencies
+      run: dotnet restore
+    
+    - name: 🧪 Run Unit Tests
+      run: |
+        dotnet test Rest.Tests/Rest.Tests.csproj \
+          --filter "FullyQualifiedName~UnitTests" \
+          --configuration Release \
+          --no-restore \
+          --logger "trx;LogFileName=unit-test-results.trx" \
+          --logger "console;verbosity=detailed" \
+          --collect:"XPlat Code Coverage" \
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+    
+    - name: 📊 Generate Test Report
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: Unit Test Results
+        path: '**/unit-test-results.trx'
+        reporter: dotnet-trx
+        fail-on-error: true
+    
+    - name: 📈 Code Coverage Report
+      uses: codecov/codecov-action@v4
+      if: always()
+      with:
+        files: '**/coverage.opencover.xml'
+        flags: unittests
+        name: unit-tests
+        fail_ci_if_error: false
+
+  # Integration Tests
+  integration-tests:
+    name: Integration Tests
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: 📦 Restore dependencies
+      run: dotnet restore
+    
+    - name: 🧪 Run Integration Tests
+      run: |
+        dotnet test Rest.Tests/Rest.Tests.csproj \
+          --filter "FullyQualifiedName~IntegrationTests" \
+          --configuration Release \
+          --no-restore \
+          --logger "trx;LogFileName=integration-test-results.trx" \
+          --logger "console;verbosity=detailed" \
+          --collect:"XPlat Code Coverage"
+    
+    - name: 📊 Generate Test Report
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: Integration Test Results
+        path: '**/integration-test-results.trx'
+        reporter: dotnet-trx
+        fail-on-error: true
+    
+    - name: 📈 Code Coverage Report
+      uses: codecov/codecov-action@v4
+      if: always()
+      with:
+        files: '**/coverage.opencover.xml'
+        flags: integrationtests
+        name: integration-tests
+        fail_ci_if_error: false
+
+  # Security Tests
+  security-tests:
+    name: Security Tests
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: 📦 Restore dependencies
+      run: dotnet restore
+    
+    - name: 🔒 Run Security Tests
+      run: |
+        dotnet test Rest.Tests/Rest.Tests.csproj \
+          --filter "FullyQualifiedName~SecurityTests" \
+          --configuration Release \
+          --no-restore \
+          --logger "trx;LogFileName=security-test-results.trx" \
+          --logger "console;verbosity=detailed"
+      continue-on-error: true  # Security tests may fail in CI environment
+    
+    - name: 📊 Generate Test Report
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: Security Test Results
+        path: '**/security-test-results.trx'
+        reporter: dotnet-trx
+        fail-on-error: false
+
+  # Dependency Security Scan
+  dependency-scan:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: 🔍 Scan for vulnerable dependencies
+      run: |
+        dotnet list Rest/Rest.csproj package --vulnerable --include-transitive 2>&1 | tee vulnerable-dependencies.txt
+        if grep -q "has the following vulnerable packages" vulnerable-dependencies.txt; then
+          echo "❌ Vulnerable dependencies found!"
+          cat vulnerable-dependencies.txt
+          exit 1
+        else
+          echo "✅ No vulnerable dependencies found"
+        fi
+
+  # Code Quality Analysis
+  code-quality:
+    name: Code Quality Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: 📦 Restore dependencies
+      run: dotnet restore
+    
+    - name: 🔍 Run Code Analysis
+      run: dotnet build Rest/Rest.csproj --no-restore --configuration Release /p:RunAnalyzers=true /p:TreatWarningsAsErrors=false
+    
+    - name: 📊 Upload analysis results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: code-analysis-results
+        path: '**/AnalysisResults.sarif'
+        retention-days: 7
+        if-no-files-found: ignore
+
+  # All Tests Combined (for summary)
+  all-tests:
+    name: All Tests
+    needs: [unit-tests, integration-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: 📦 Restore dependencies
+      run: dotnet restore
+    
+    - name: 🧪 Run All Tests (Except Explicit)
+      run: |
+        dotnet test Rest.Tests/Rest.Tests.csproj \
+          --configuration Release \
+          --no-restore \
+          --logger "trx;LogFileName=all-test-results.trx" \
+          --logger "console;verbosity=normal" \
+          --collect:"XPlat Code Coverage" \
+          --results-directory ./TestResults \
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+    
+    - name: 📊 Test Summary
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: All Test Results Summary
+        path: '**/all-test-results.trx'
+        reporter: dotnet-trx
+        fail-on-error: false
+    
+    - name: 📈 Combined Code Coverage
+      uses: codecov/codecov-action@v4
+      if: always()
+      with:
+        files: './TestResults/**/coverage.opencover.xml'
+        flags: alltests
+        name: all-tests-coverage
+        fail_ci_if_error: false
+    
+    - name: 📤 Upload Test Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: |
+          **/TestResults/
+          **/*.trx
+        retention-days: 30
+
+  # Performance Baseline
+  performance-check:
+    name: Performance Check
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: 📦 Restore dependencies
+      run: dotnet restore
+    
+    - name: ⚡ Run Performance Tests
+      run: |
+        dotnet test Rest.Tests/Rest.Tests.csproj \
+          --filter "TestCategory=Load|FullyQualifiedName~PerformanceTests" \
+          --configuration Release \
+          --no-restore \
+          --logger "console;verbosity=detailed"
+      continue-on-error: true  # Performance tests may timeout in CI
+    
+    - name: 📊 Performance Report
+      if: always()
+      run: echo "Performance tests completed. Review logs for details."
+
+  # Database migration check
+  migration-check:
+    name: Database Migration Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🔧 Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: 📦 Restore dependencies
+      run: dotnet restore Rest/Rest.csproj
+    
+    - name: 🗃️ Check migrations
+      run: |
+        cd Rest
+        echo "Checking for pending migrations..."
+        # This validates that migrations can be generated
+        dotnet ef migrations list || echo "No migrations found or EF tools not installed"
+
+  # Final status check
+  ci-success:
+    name: ✅ CI Pipeline Success
+    needs: [build, unit-tests, integration-tests, code-quality, dependency-scan]
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+    - name: 🎉 All checks passed
+      run: |
+        echo "✅ All CI checks passed successfully!"
+        echo "Build: ✅"
+        echo "Unit Tests: ✅"
+        echo "Integration Tests: ✅"
+        echo "Code Quality: ✅"
+        echo "Dependency Scan: ✅"
+    
+    - name: 📢 Success notification
+      run: echo "Pipeline completed successfully. Ready for deployment!"

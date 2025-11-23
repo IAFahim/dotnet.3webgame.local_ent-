@@ -1,0 +1,46 @@
+# Automatically label PRs based on changed files
+
+documentation:
+  - '**/*.md'
+  - 'docs/**/*'
+
+tests:
+  - 'Rest.Tests/**/*'
+  - '**/*Tests.cs'
+  - '**/*Test.cs'
+
+api:
+  - 'Rest/Controllers/**/*'
+  - 'Rest/Features/**/*'
+
+database:
+  - 'Rest/Data/**/*'
+  - 'Rest/Migrations/**/*'
+  - '**/ApplicationDbContext.cs'
+
+security:
+  - 'Rest/Middleware/Security*.cs'
+  - 'Rest/Services/TokenService.cs'
+  - '**/Auth/**/*'
+
+configuration:
+  - '**/*.json'
+  - '**/*.yml'
+  - '**/*.yaml'
+  - '.github/**/*'
+
+dependencies:
+  - '**/packages.lock.json'
+  - '**/*.csproj'
+
+models:
+  - 'Rest/Models/**/*'
+
+services:
+  - 'Rest/Services/**/*'
+
+middleware:
+  - 'Rest/Middleware/**/*'
+
+ci-cd:
+  - '.github/workflows/**/*'
